@@ -1,0 +1,29 @@
+[package]
+name = "screen-ocr"
+version = "0.1.0"
+edition = "2021"
+
+# ─────────────────────────────────────────────
+# Dependency rationale
+# ─────────────────────────────────────────────
+# rdev          – Global key-event listener without an X11 window
+# tempfile      – Creates a NamedTempFile that auto-deletes on drop
+# anyhow        – Ergonomic error propagation with context messages
+# ctrlc         – Catches Ctrl-C so we can shut down cleanly
+# libc          – setsid() + kill() for TTS process group management
+# serde         – Region struct JSON serialization
+# serde_json    – Read/write last_region.json
+# ─────────────────────────────────────────────
+
+[[bin]]
+name = "screen-ocr"
+path = "src/main.rs"
+
+[dependencies]
+rdev       = "0.5"
+tempfile   = "3"
+anyhow     = "1"
+ctrlc      = { version = "3", features = ["termination"] }
+libc       = "0.2"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"

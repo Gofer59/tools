@@ -1,0 +1,28 @@
+[package]
+name = "threshold-filter"
+version = "0.1.0"
+edition = "2021"
+description = "Live screen threshold filter overlay"
+
+[[bin]]
+name = "threshold-filter"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.31"
+egui = "0.31"
+image = { version = "0.25", default-features = false }
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+rdev = "0.5"
+raw-window-handle = "0.6"
+
+# xcap: use WGC-enabled 0.8 on Windows (captures DirectX/Vulkan games), GDI-only 0.4 on Linux
+[target.'cfg(target_os = "linux")'.dependencies]
+xcap = "0.4.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+xcap = { version = "0.8", features = ["wgc"] }

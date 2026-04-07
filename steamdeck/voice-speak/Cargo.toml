@@ -1,0 +1,22 @@
+[package]
+name = "voice-speak"
+version = "0.1.0"
+edition = "2021"
+
+# ─────────────────────────────────────────────
+# Dependency rationale
+# ─────────────────────────────────────────────
+# rdev          – Global key-event listener without an X11 window
+# anyhow        – Ergonomic error propagation with context messages
+# ctrlc         – Catches Ctrl-C so we can shut down cleanly
+# ─────────────────────────────────────────────
+
+[[bin]]
+name = "voice-speak"
+path = "src/main.rs"
+
+[dependencies]
+rdev    = "0.5"
+anyhow  = "1"
+ctrlc   = { version = "3", features = ["termination"] }
+libc    = "0.2"

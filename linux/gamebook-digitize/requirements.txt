@@ -1,0 +1,10 @@
+opencv-python-headless
+Pillow
+ImageHash
+numpy
+surya-ocr==0.17.1
+# surya-ocr 0.17.1 is incompatible with transformers 5.x
+transformers<5
+pytesseract
+# transitive dep of surya-ocr -- must be explicit (not pulled in reliably)
+requests

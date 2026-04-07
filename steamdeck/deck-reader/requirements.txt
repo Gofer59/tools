@@ -1,0 +1,5 @@
+piper-tts
+sounddevice
+numpy
+pytesseract
+Pillow

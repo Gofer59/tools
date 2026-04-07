@@ -1,0 +1,52 @@
+#!/bin/bash
+# Usage: compress-videos <file-or-folder> [crf]
+# Accepts a single video file or a folder of videos.
+# Outputs to a "compressed/" subfolder next to the input. Default CRF=28.
+
+set -euo pipefail
+
+INPUT="${1:-.}"
+CRF="${2:-28}"
+
+if [ -f "$INPUT" ]; then
+  # Single file mode
+  DIR="$(dirname "$INPUT")"
+  OUTDIR="$DIR/compressed"
+  mkdir -p "$OUTDIR"
+  files=("$INPUT")
+elif [ -d "$INPUT" ]; then
+  # Directory mode
+  DIR="$INPUT"
+  OUTDIR="$DIR/compressed"
+  mkdir -p "$OUTDIR"
+  shopt -s nullglob nocaseglob
+  files=("$DIR"/*.{mp4,mkv,avi,mov,webm,wmv})
+  shopt -u nullglob nocaseglob
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "No video files found in $DIR"
+    exit 1
+  fi
+else
+  echo "Error: '$INPUT' is not a file or directory"
+  exit 1
+fi
+
+echo "Compressing ${#files[@]} video(s) with CRF=$CRF → $OUTDIR/"
+echo ""
+
+for f in "${files[@]}"; do
+  name=$(basename "$f")
+  out="$OUTDIR/${name%.*}.mp4"
+  echo "► $name"
+  ffmpeg -hide_banner -loglevel warning -i "$f" \
+    -c:v libx265 -crf "$CRF" -preset medium \
+    -c:a aac -b:a 128k \
+    "$out"
+  orig=$(stat --format=%s "$f")
+  comp=$(stat --format=%s "$out")
+  ratio=$((100 - comp * 100 / orig))
+  echo "  $(numfmt --to=iec "$orig") → $(numfmt --to=iec "$comp") (${ratio}% smaller)"
+done
+
+echo ""
+echo "Done. Output in $OUTDIR/"

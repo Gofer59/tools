@@ -1,0 +1,70 @@
+# Build artifacts
+target/
+build/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.d
+
+# Rust-specific
+.rustc_info.json
+.cargo-lock
+.fingerprint/
+CACHEDIR.TAG
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Sensitive files
+.env
+*.env
+oauth-client.json
+tokens.json
+credentials.json
+*.pem
+*.key
+*.secret
+
+# Claude Code internal files
+CLAUDE.md
+.claude/
+.superpowers/
+.mcp.json
+
+# Gradle / Android
+.gradle/
+local.properties
+*.apk
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Large archives (should not be in repo)
+*.zip
+*.tar.gz
+*.7z
+
+# Large model/binary files (download at install time)
+*.onnx
+*.bin
+
+# Cache
+*.cache.json
+*.claude_cache.json

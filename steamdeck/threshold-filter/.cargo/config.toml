@@ -1,0 +1,4 @@
+# SteamOS quirk: pkgconf's default search path doesn't reliably include
+# /usr/lib/pkgconfig and /usr/share/pkgconfig in the cargo build environment.
+[env]
+PKG_CONFIG_PATH = "/usr/lib/pkgconfig:/usr/share/pkgconfig"

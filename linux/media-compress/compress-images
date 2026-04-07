@@ -1,0 +1,80 @@
+#!/bin/bash
+# Usage: compress-images <file-or-folder> [quality]
+# Accepts a single image file or a folder of images.
+# Optimizes in-place. Originals are backed up to an "originals/" subfolder. Default JPEG quality=80.
+
+set -euo pipefail
+
+INPUT="${1:-.}"
+QUALITY="${2:-80}"
+
+if [ -f "$INPUT" ]; then
+  # Single file mode
+  DIR="$(dirname "$INPUT")"
+  BACKUP="$DIR/originals"
+  mkdir -p "$BACKUP"
+  cp "$INPUT" "$BACKUP/"
+  name=$(basename "$INPUT")
+  ext="${name##*.}"
+  orig=$(stat --format=%s "$INPUT")
+  case "${ext,,}" in
+    jpg|jpeg)
+      echo "Optimizing JPEG (quality=$QUALITY)..."
+      jpegoptim --max="$QUALITY" --strip-all "$INPUT"
+      ;;
+    png)
+      echo "Optimizing PNG..."
+      optipng -o5 -quiet "$INPUT"
+      ;;
+    *)
+      echo "Error: unsupported format '.$ext' (supported: jpg, jpeg, png)"
+      exit 1
+      ;;
+  esac
+  comp=$(stat --format=%s "$INPUT")
+  saved=$((orig - comp))
+  echo "  $(numfmt --to=iec "$orig") → $(numfmt --to=iec "$comp") (saved $(numfmt --to=iec $saved))"
+  echo "Original backed up to $BACKUP/"
+elif [ -d "$INPUT" ]; then
+  # Directory mode
+  DIR="$INPUT"
+  BACKUP="$DIR/originals"
+  mkdir -p "$BACKUP"
+
+  shopt -s nullglob nocaseglob
+  jpgs=("$DIR"/*.{jpg,jpeg})
+  pngs=("$DIR"/*.png)
+  shopt -u nullglob nocaseglob
+
+  total=$(( ${#jpgs[@]} + ${#pngs[@]} ))
+  if [ "$total" -eq 0 ]; then
+    echo "No image files found in $DIR"
+    exit 1
+  fi
+
+  before=$(du -sb "$DIR" --exclude=originals | cut -f1)
+
+  if [ ${#jpgs[@]} -gt 0 ]; then
+    echo "Optimizing ${#jpgs[@]} JPEG(s) (quality=$QUALITY)..."
+    for f in "${jpgs[@]}"; do
+      cp "$f" "$BACKUP/"
+    done
+    jpegoptim --max="$QUALITY" --strip-all "${jpgs[@]}"
+  fi
+
+  if [ ${#pngs[@]} -gt 0 ]; then
+    echo "Optimizing ${#pngs[@]} PNG(s)..."
+    for f in "${pngs[@]}"; do
+      cp "$f" "$BACKUP/"
+    done
+    optipng -o5 -quiet "${pngs[@]}"
+  fi
+
+  after=$(du -sb "$DIR" --exclude=originals | cut -f1)
+  saved=$((before - after))
+  echo ""
+  echo "Done. Saved $(numfmt --to=iec $saved). Originals backed up to $BACKUP/"
+else
+  echo "Error: '$INPUT' is not a file or directory"
+  exit 1
+fi

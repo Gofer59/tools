@@ -1,0 +1,31 @@
+[package]
+name = "deck-reader"
+version = "0.1.0"
+edition = "2021"
+
+# ─────────────────────────────────────────────
+# Dependency rationale
+# ─────────────────────────────────────────────
+# rdev       – Global key-event listener (no X11 window needed)
+# anyhow     – Ergonomic error propagation with context messages
+# ctrlc      – Catches Ctrl-C so we can shut down cleanly
+# libc       – setsid() + kill() for TTS process group isolation
+# tempfile   – Auto-cleanup temp PNG for OCR captures
+# serde      – Serialization for region JSON
+# serde_json – Persist OCR region geometry to disk
+# toml       – Parse ~/.config/deck-reader/config.toml
+# ─────────────────────────────────────────────
+
+[[bin]]
+name = "deck-reader"
+path = "src/main.rs"
+
+[dependencies]
+rdev       = "0.5"
+anyhow     = "1"
+ctrlc      = { version = "3", features = ["termination"] }
+libc       = "0.2"
+tempfile   = "3"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml       = "0.8"

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BookReader</string>
+    <string name="btn_freeze">Capturer</string>
+    <string name="btn_read_selected">Lire la sélection</string>
+    <string name="btn_clear">Effacer</string>
+    <string name="permission_camera_required">L\'autorisation de la caméra est requise pour utiliser cette application</string>
+    <string name="permission_camera_denied">Permission caméra refusée. Activez-la dans les paramètres.</string>
+    <string name="ocr_processing">Reconnaissance du texte en cours\u2026</string>
+    <string name="no_text_detected">Aucun texte détecté</string>
+    <string name="tts_not_ready">La synthèse vocale n\'est pas encore prête</string>
+    <string name="french_voice_missing">Voix française non disponible</string>
+    <string name="install_voice">Installer</string>
+    <string name="no_selection">Aucune sélection</string>
+    <string name="tts_error">Erreur du moteur vocal</string>
+    <string name="capture_error">Erreur de capture : %1$s</string>
+    <string name="content_desc_frozen_frame">Image capturée</string>
+    <string name="lang_fr">FR</string>
+    <string name="lang_en">EN</string>
+    <string name="voice_missing">Voix %1$s non disponible</string>
+</resources>

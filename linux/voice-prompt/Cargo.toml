@@ -1,0 +1,27 @@
+[package]
+name = "voice-prompt"
+version = "0.1.0"
+edition = "2021"
+
+# ─────────────────────────────────────────────
+# Dependency rationale
+# ─────────────────────────────────────────────
+# cpal          – Cross-platform audio capture (uses ALSA on Linux)
+# hound         – Writes PCM samples → a valid .wav file (simple API)
+# rdev          – Global key-event listener without an X11 window
+# tempfile      – Creates a NamedTempFile that auto-deletes on drop
+# anyhow        – Ergonomic error propagation with context messages
+# ctrlc         – Catches Ctrl-C so we can shut down cleanly
+# ─────────────────────────────────────────────
+
+[[bin]]
+name = "voice-prompt"
+path = "src/main.rs"
+
+[dependencies]
+cpal    = "0.15"
+hound   = "3.5"
+rdev    = "0.5"
+tempfile = "3"
+anyhow  = "1"
+ctrlc   = { version = "3", features = ["termination"] }

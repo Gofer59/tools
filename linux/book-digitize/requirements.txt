@@ -1,0 +1,7 @@
+pytesseract
+Pillow
+opencv-python-headless
+ImageHash
+numpy
+surya-ocr
+fpdf2
