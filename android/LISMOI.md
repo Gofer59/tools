@@ -6,7 +6,7 @@ Applications Android compilees avec Gradle sur une machine Linux ou macOS.
 
 | Outil | Description |
 |-------|-------------|
-| [book-reader](book-reader/) | Application de lecture OCR + synthese vocale (francais/anglais) |
+| [book-reader](book-reader/) | Application de lecture OCR + synthese vocale (francais/anglais) — [APK pre-compile](book-reader/app-debug.apk) |
 
 ## Prerequis
 

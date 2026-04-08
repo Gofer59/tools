@@ -15,9 +15,19 @@ Pour compiler depuis les sources :
 - **Android Studio** (Hedgehog 2023.1 ou plus recent) ou les outils en ligne de commande du Android SDK
 - **JDK 17+**
 
-Pour installer un APK pre-compile :
+Pour installer l'APK pre-compile :
 
 - Un telephone Android sous Android 8.0 ou plus recent
+
+## APK pre-compile
+
+Un APK pret a installer est inclus dans le depot :
+
+```
+book-reader/app-debug.apk
+```
+
+Voir la section [Installation](#installation) ci-dessous pour le transferer sur votre telephone.
 
 ## Compilation
 

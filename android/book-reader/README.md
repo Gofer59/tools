@@ -15,9 +15,19 @@ To build from source:
 - **Android Studio** (Hedgehog 2023.1 or later) or the Android SDK command-line tools
 - **JDK 17+**
 
-To install a pre-built APK:
+To install the pre-built APK:
 
 - An Android phone running Android 8.0 or later
+
+## Pre-built APK
+
+A ready-to-install APK is included in the repository:
+
+```
+book-reader/app-debug.apk
+```
+
+See the [Install](#install) section below to transfer it to your phone.
 
 ## Build
 

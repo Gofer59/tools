@@ -6,7 +6,7 @@ Android applications built with Gradle on a Linux or macOS machine.
 
 | Tool | Description |
 |------|-------------|
-| [book-reader](book-reader/) | OCR + TTS book reader app (French/English) |
+| [book-reader](book-reader/) | OCR + TTS book reader app (French/English) — [pre-built APK](book-reader/app-debug.apk) |
 
 ## Prerequisites
 
