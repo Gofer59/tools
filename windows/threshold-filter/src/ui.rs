@@ -404,6 +404,10 @@ impl eframe::App for ThresholdApp {
         egui::SidePanel::left("controls")
             .exact_width(55.0)
             .resizable(false)
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .fill(egui::Color32::BLACK),
+            )
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.label("Thr");
@@ -467,7 +471,9 @@ impl eframe::App for ThresholdApp {
             });
 
         // Image display / selection UI
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| {
             // Windows: in-app selection UI
             #[cfg(target_os = "windows")]
             self.render_windows_selection(ctx, ui);

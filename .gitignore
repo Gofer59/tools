@@ -46,8 +46,7 @@ CLAUDE.md
 # Gradle / Android
 .gradle/
 local.properties
-*.apk
-!android/book-reader/app-debug.apk
+# *.apk
 
 # IDE / OS
 .DS_Store

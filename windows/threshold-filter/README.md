@@ -155,6 +155,7 @@ DPI scaling is handled automatically: the region drawer converts between physica
 ## Known Limitations
 
 - **Target window must stay open.** If the captured window is closed or minimized, capture fails gracefully and the display freezes on the last frame.
+- **Mouse pointer may occasionally appear in captures.** `xcap` asks Windows Graphics Capture to exclude the cursor (`SetIsCursorCaptureEnabled(false)`), but on some Windows builds the flag is not honored reliably for per-window captures. If you see your pointer blink in the thresholded image, move it away from the target window or freeze capture by pausing the target app.
 - **No multi-monitor DPI mixing.** DPI scaling is computed from the captured window; if the overlay and target are on monitors with different DPI, alignment may be slightly off.
 - **Binary size is ~18 MB** due to the egui rendering backend.
 - **Some windows may not appear in the picker** if they report zero size or have no title.

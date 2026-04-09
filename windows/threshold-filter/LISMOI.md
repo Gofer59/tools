@@ -155,6 +155,7 @@ La mise a l'echelle DPI est geree automatiquement : le traceur de region convert
 ## Limitations connues
 
 - **La fenetre cible doit rester ouverte.** Si la fenetre capturee est fermee ou minimisee, la capture echoue silencieusement et l'affichage se fige sur la derniere image.
+- **Le pointeur de souris peut apparaitre dans les captures.** `xcap` demande a Windows Graphics Capture d'exclure le curseur (`SetIsCursorCaptureEnabled(false)`), mais sur certaines versions de Windows ce reglage n'est pas respecte de maniere fiable pour les captures par fenetre. Si vous voyez votre pointeur clignoter dans l'image seuillee, eloignez-le de la fenetre cible ou figez la capture en mettant l'application cible en pause.
 - **Pas de support multi-moniteur avec DPI differents.** La mise a l'echelle DPI est calculee a partir de la fenetre capturee ; si l'overlay et la cible sont sur des ecrans avec des DPI differents, l'alignement peut etre legerement decale.
 - **La taille du binaire est d'environ 18 Mo** a cause du backend de rendu egui.
 - **Certaines fenetres peuvent ne pas apparaitre dans la liste** si elles rapportent une taille nulle ou n'ont pas de titre.

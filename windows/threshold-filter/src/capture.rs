@@ -10,7 +10,7 @@ pub struct WindowCrop {
     pub height: u32,
 }
 
-/// Capture a specific window by X11 ID, optionally cropping to a sub-region.
+/// Capture a specific window by ID, optionally cropping to a sub-region.
 /// Returns RGBA pixel data + dimensions.
 pub fn capture_window(window_id: u32, crop: Option<&WindowCrop>) -> Result<(Vec<u8>, u32, u32)> {
     let windows = xcap::Window::all().context("failed to list windows")?;
