@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Install deck-reader on Windows 10/11.
 
@@ -18,7 +18,7 @@
 
 .PARAMETER SkipModel
     Skip downloading the Piper voice model (useful if already downloaded or
-    on a slow connection — download manually later).
+    on a slow connection -- download manually later).
 
 .NOTES
     Requirements (must be pre-installed):
@@ -35,9 +35,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Paths
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 $ScriptDir = $PSScriptRoot
 $DataDir   = "$env:LOCALAPPDATA\deck-reader"
 $VenvDir   = "$DataDir\venv"
@@ -50,9 +50,9 @@ $StartMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
 $VoiceName = "en_US-lessac-medium"
 $VoiceBase = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Helper functions
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 function Step($n, $msg) {
     Write-Host ""
     Write-Host "[$n] $msg" -ForegroundColor Cyan
@@ -72,9 +72,9 @@ function Require-Command($cmd, $installHint) {
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 1: Prerequisites
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 1 "Checking prerequisites"
 
 Require-Command python  "Install Python 3.10+ from https://www.python.org/downloads/"
@@ -87,16 +87,16 @@ Ok "Python: $pyVer"
 $cargoVer = cargo --version 2>&1
 Ok "Cargo: $cargoVer"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 2: Tesseract OCR
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 2 "Installing Tesseract OCR"
 
 $tesseractExe = "C:\Program Files\Tesseract-OCR\tesseract.exe"
 if (Test-Path $tesseractExe) {
     Ok "Tesseract already installed at $tesseractExe"
 } else {
-    Write-Host "    Installing via winget…"
+    Write-Host "    Installing via winget..."
     winget install --id UB-Mannheim.TesseractOCR `
         --accept-package-agreements `
         --accept-source-agreements `
@@ -113,9 +113,9 @@ if ($env:PATH -notlike "*Tesseract*") {
     $env:PATH = "$tessDir;$env:PATH"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 3: Build the Rust binary
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 3 "Building deck-reader (cargo build --release)"
 
 Push-Location $ScriptDir
@@ -132,9 +132,9 @@ if (-not (Test-Path $builtExe)) {
 }
 Ok "Built: $builtExe"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 4: Copy binary and helper scripts to %LOCALAPPDATA%\deck-reader\bin\
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 4 "Copying binary and wrapper scripts to $BinDir"
 
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
@@ -159,9 +159,9 @@ $ttsBat = "$BinDir\tts_speak_wrapper.bat"
 "@ | Set-Content -Encoding ASCII $ttsBat
 Ok "Created tts_speak_wrapper.bat"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 5: Python venv and dependencies
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 5 "Creating Python venv at $VenvDir"
 
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
@@ -173,55 +173,55 @@ if (-not (Test-Path "$VenvDir\Scripts\python.exe")) {
     Ok "venv already exists."
 }
 
-Write-Host "    Installing Python dependencies (pip install -r requirements.txt)…"
+Write-Host "    Installing Python dependencies (pip install -r requirements.txt)..."
 & "$VenvDir\Scripts\pip.exe" install -r "$ScriptDir\requirements.txt" --quiet
 if ($LASTEXITCODE -ne 0) { Fail "pip install failed." }
 Ok "Python dependencies installed."
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 6: Copy Python scripts
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 6 "Copying Python scripts to $PyDir"
 
 New-Item -ItemType Directory -Force -Path $PyDir | Out-Null
 Copy-Item -Force "$ScriptDir\python\*.py" $PyDir
 Ok "Python scripts copied."
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 7: Download Piper voice model
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 7 "Downloading Piper voice model ($VoiceName)"
 
 New-Item -ItemType Directory -Force -Path $ModelsDir | Out-Null
 
 if ($SkipModel) {
     Warn "Skipping model download (-SkipModel flag set)."
-    Warn "Download manually: $VoiceBase/$VoiceName.onnx → $ModelsDir\$VoiceName.onnx"
-    Warn "                   $VoiceBase/$VoiceName.onnx.json → $ModelsDir\$VoiceName.onnx.json"
+    Warn "Download manually: $VoiceBase/$VoiceName.onnx -> $ModelsDir\$VoiceName.onnx"
+    Warn "                   $VoiceBase/$VoiceName.onnx.json -> $ModelsDir\$VoiceName.onnx.json"
 } elseif (Test-Path "$ModelsDir\$VoiceName.onnx") {
     Ok "Model already present: $ModelsDir\$VoiceName.onnx"
 } else {
-    Write-Host "    Downloading $VoiceName.onnx (~65 MB)…"
+    Write-Host "    Downloading $VoiceName.onnx (~65 MB)..."
     Invoke-WebRequest "$VoiceBase/$VoiceName.onnx" `
         -OutFile "$ModelsDir\$VoiceName.onnx" `
         -UseBasicParsing
-    Write-Host "    Downloading $VoiceName.onnx.json…"
+    Write-Host "    Downloading $VoiceName.onnx.json..."
     Invoke-WebRequest "$VoiceBase/$VoiceName.onnx.json" `
         -OutFile "$ModelsDir\$VoiceName.onnx.json" `
         -UseBasicParsing
     Ok "Model downloaded."
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Step 8: Config and Start Menu shortcut
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Step 8 "Writing config and Start Menu shortcut"
 
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
 
 $configFile = "$ConfigDir\config.toml"
 if (Test-Path $configFile) {
-    Ok "Config already exists — not overwriting: $configFile"
+    Ok "Config already exists -- not overwriting: $configFile"
 } else {
     # Embed Windows-safe paths with forward slashes (shellexpand handles them).
     $modelsPath = $ModelsDir.Replace('\', '/')
@@ -260,30 +260,30 @@ $shell        = New-Object -ComObject WScript.Shell
 $shortcut     = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath       = "$BinDir\deck-reader.exe"
 $shortcut.WorkingDirectory = $BinDir
-$shortcut.Description      = "deck-reader — screen OCR + TTS hotkeys"
+$shortcut.Description      = "deck-reader -- screen OCR + TTS hotkeys"
 $shortcut.Save()
 Ok "Start Menu shortcut: $shortcutPath"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Done
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║           deck-reader installed successfully          ║" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  Binary   : $BinDir\deck-reader.exe" -ForegroundColor Green
-Write-Host "║  Config   : $ConfigDir\config.toml" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  Hotkeys (default):                                   ║" -ForegroundColor Green
-Write-Host "║    Alt + U  →  select region + OCR                    ║" -ForegroundColor Green
-Write-Host "║    Alt + I  →  re-OCR last region                     ║" -ForegroundColor Green
-Write-Host "║    Alt + Y  →  toggle TTS (speak / stop)              ║" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  Launch from Start Menu or run:                       ║" -ForegroundColor Green
-Write-Host "║    $BinDir\deck-reader.exe" -ForegroundColor Green
-Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Green
-Write-Host "║  NOTE: Windows Defender / SmartScreen may show a      ║" -ForegroundColor Yellow
-Write-Host "║  warning on first run (unsigned binary). Right-click  ║" -ForegroundColor Yellow
-Write-Host "║  the .exe → Properties → Unblock, or run from a      ║" -ForegroundColor Yellow
-Write-Host "║  terminal to bypass SmartScreen.                      ║" -ForegroundColor Yellow
-Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "+======================================================+" -ForegroundColor Green
+Write-Host "|           deck-reader installed successfully          |" -ForegroundColor Green
+Write-Host "+======================================================+" -ForegroundColor Green
+Write-Host "|  Binary   : $BinDir\deck-reader.exe" -ForegroundColor Green
+Write-Host "|  Config   : $ConfigDir\config.toml" -ForegroundColor Green
+Write-Host "+======================================================+" -ForegroundColor Green
+Write-Host "|  Hotkeys (default):                                   |" -ForegroundColor Green
+Write-Host "|    Alt + U  ->  select region + OCR                    |" -ForegroundColor Green
+Write-Host "|    Alt + I  ->  re-OCR last region                     |" -ForegroundColor Green
+Write-Host "|    Alt + Y  ->  toggle TTS (speak / stop)              |" -ForegroundColor Green
+Write-Host "+======================================================+" -ForegroundColor Green
+Write-Host "|  Launch from Start Menu or run:                       |" -ForegroundColor Green
+Write-Host "|    $BinDir\deck-reader.exe" -ForegroundColor Green
+Write-Host "+======================================================+" -ForegroundColor Green
+Write-Host "|  NOTE: Windows Defender / SmartScreen may show a      |" -ForegroundColor Yellow
+Write-Host "|  warning on first run (unsigned binary). Right-click  |" -ForegroundColor Yellow
+Write-Host "|  the .exe -> Properties -> Unblock, or run from a      |" -ForegroundColor Yellow
+Write-Host "|  terminal to bypass SmartScreen.                      |" -ForegroundColor Yellow
+Write-Host "+======================================================+" -ForegroundColor Green
