@@ -24,9 +24,9 @@ mod platform;
 use std::{
     collections::HashSet,
     fs,
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Command},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -35,8 +35,10 @@ use std::{
 
 #[cfg(unix)]
 use std::{
+    io::{BufRead, BufReader},
     os::unix::net::UnixStream,
     os::unix::process::CommandExt,
+    process::Stdio,
 };
 
 use anyhow::{Context, Result};
@@ -686,7 +688,7 @@ fn ensure_connection(state: &mut TtsState) -> Result<()> {
 
 /// Send a TTS request to the daemon.  Falls back to the cold-start wrapper
 /// if the daemon is unreachable.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, unused_variables)]
 fn request_tts(
     text: &str,
     voice: &str,
@@ -1134,6 +1136,7 @@ fn main() -> Result<()> {
     // ── GUI window (Linux only) ──────────────────────────────────────────────
     // Spawn a Tk status window on Linux. Skipped on Windows (deferred to phase 2).
     let mut gui_stdin: Option<std::process::ChildStdin> = None;
+    #[allow(unused_mut)] // mutated inside #[cfg(unix)] block
     let mut gui_child: Option<Child> = None;
     #[cfg(unix)]
     {

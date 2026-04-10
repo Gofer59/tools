@@ -136,14 +136,14 @@ impl eframe::App for RegionSelector {
 
         // Paint overlay.
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(egui::Color32::from_black_alpha(150)))
+            .frame(egui::Frame::NONE.fill(egui::Color32::from_black_alpha(150)))
             .show(ctx, |ui| {
                 let painter = ui.painter();
 
                 painter.text(
                     egui::pos2(ui.max_rect().center().x, 28.0),
                     egui::Align2::CENTER_CENTER,
-                    "Drag to select a region — Esc to cancel",
+                    "Drag to select a region -- Esc to cancel",
                     egui::FontId::proportional(18.0),
                     egui::Color32::WHITE,
                 );
@@ -155,6 +155,7 @@ impl eframe::App for RegionSelector {
                         r,
                         0.0,
                         egui::Stroke::new(2.0, egui::Color32::WHITE),
+                        egui::StrokeKind::Outside,
                     );
                 }
             });
@@ -173,10 +174,13 @@ pub fn select_region() -> Result<Region> {
     }
 
     // Virtual-screen bounding box (spans all monitors).
-    let virt_x = monitors.iter().map(|m| m.x()).min().unwrap_or(0);
-    let virt_y = monitors.iter().map(|m| m.y()).min().unwrap_or(0);
-    let virt_w = (monitors.iter().map(|m| m.x() + m.width()  as i32).max().unwrap_or(1920) - virt_x) as f32;
-    let virt_h = (monitors.iter().map(|m| m.y() + m.height() as i32).max().unwrap_or(1080) - virt_y) as f32;
+    // xcap 0.8 monitor accessors return Result — unwrap with defaults.
+    let virt_x = monitors.iter().filter_map(|m| m.x().ok()).min().unwrap_or(0);
+    let virt_y = monitors.iter().filter_map(|m| m.y().ok()).min().unwrap_or(0);
+    let virt_right  = monitors.iter().filter_map(|m| Some(m.x().ok()? + m.width().ok()? as i32)).max().unwrap_or(1920);
+    let virt_bottom = monitors.iter().filter_map(|m| Some(m.y().ok()? + m.height().ok()? as i32)).max().unwrap_or(1080);
+    let virt_w = (virt_right  - virt_x) as f32;
+    let virt_h = (virt_bottom - virt_y) as f32;
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel::<Option<Region>>(1);
 
@@ -208,13 +212,13 @@ pub fn capture_region(region: &Region, output_path: &Path) -> Result<()> {
     let monitors = xcap::Monitor::all().context("Failed to enumerate monitors")?;
 
     // Find the monitor whose bounding box contains the region's top-left corner.
+    // xcap 0.8 accessors return Result — use ok() defaults for the geometry check.
     let mon = monitors
         .iter()
         .find(|m| {
-            region.x >= m.x()
-                && region.x < m.x() + m.width() as i32
-                && region.y >= m.y()
-                && region.y < m.y() + m.height() as i32
+            let (mx, my) = (m.x().unwrap_or(0), m.y().unwrap_or(0));
+            let (mw, mh) = (m.width().unwrap_or(0) as i32, m.height().unwrap_or(0) as i32);
+            region.x >= mx && region.x < mx + mw && region.y >= my && region.y < my + mh
         })
         .ok_or_else(|| {
             anyhow!(
@@ -228,8 +232,8 @@ pub fn capture_region(region: &Region, output_path: &Path) -> Result<()> {
     let image = mon.capture_image().context("Failed to capture monitor image")?;
 
     // Convert virtual-screen coords to monitor-local coords.
-    let local_x = (region.x - mon.x()) as u32;
-    let local_y = (region.y - mon.y()) as u32;
+    let local_x = (region.x - mon.x().unwrap_or(0)) as u32;
+    let local_y = (region.y - mon.y().unwrap_or(0)) as u32;
 
     let cropped = image::imageops::crop_imm(
         &image,
