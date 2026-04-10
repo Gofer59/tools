@@ -140,24 +140,44 @@ def speak(text: str, voice: str, speed: float) -> None:
     # Convert float32 [-1.0, 1.0] → int16 PCM for WAV.
     audio_i16 = (audio.clip(-1.0, 1.0) * 32767).astype(np.int16)
 
-    # Write to a temp WAV file and play via paplay (PulseAudio/PipeWire).
-    # This ensures audio goes through the system sound server and reaches
-    # the correct output device, unlike raw ALSA which can be silent.
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
-        with wave.open(tmp.name, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(sample_rate)
-            wf.writeframes(audio_i16.tobytes())
+    if sys.platform == "win32":
+        # Windows: sounddevice → portaudio → WASAPI/DirectSound.
+        # No paplay, no temp WAV — play the int16 array directly.
+        try:
+            import sounddevice as sd  # type: ignore
+        except ImportError:
+            print(
+                "ERROR: sounddevice is not installed.\n"
+                "Run:  pip install sounddevice",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         duration = len(audio) / sample_rate
-        print(f"[tts] Playing {duration:.1f}s of audio at {sample_rate} Hz", file=sys.stderr)
+        print(
+            f"[tts] Playing {duration:.1f}s of audio at {sample_rate} Hz",
+            file=sys.stderr,
+        )
+        sd.play(audio_i16, sample_rate, blocking=True)
+    else:
+        # Linux: paplay via a temp WAV file.  paplay routes through
+        # PulseAudio/PipeWire → correct output sink, unlike raw ALSA which
+        # can be silent in PipeWire sessions.
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
+            with wave.open(tmp.name, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio_i16.tobytes())
 
-        # paplay routes through PulseAudio/PipeWire → correct output sink.
-        result = subprocess.run(["paplay", tmp.name])
-        if result.returncode != 0:
-            print(f"[tts] paplay failed (exit {result.returncode})", file=sys.stderr)
-            sys.exit(1)
+            duration = len(audio) / sample_rate
+            print(f"[tts] Playing {duration:.1f}s of audio at {sample_rate} Hz", file=sys.stderr)
+
+            # paplay routes through PulseAudio/PipeWire → correct output sink.
+            result = subprocess.run(["paplay", tmp.name])
+            if result.returncode != 0:
+                print(f"[tts] paplay failed (exit {result.returncode})", file=sys.stderr)
+                sys.exit(1)
 
     print("[tts] Done.", file=sys.stderr)
 

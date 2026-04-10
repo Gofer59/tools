@@ -1,4 +1,4 @@
-// deck-reader — screen OCR + TTS for SteamDeck (KDE Plasma, X11 or Wayland)
+// deck-reader — screen OCR + TTS (Linux SteamDeck; Windows port in progress)
 //
 // HOW IT WORKS
 // ────────────
@@ -7,23 +7,24 @@
 // Alt + I  → re-capture saved region   → OCR → clipboard → auto-speak
 // Alt + Y  → TTS toggle (speak highlighted text, or stop if speaking)
 //
-// DISPLAY SERVER AUTO-DETECTION
-// ──────────────────────────────
-// X11:     slop (select), maim (capture), xclip (clipboard), xdotool (type)
-// Wayland: slurp (select), grim (capture), wl-paste/wl-copy (clipboard), ydotool (type)
-// Audio:   tts_speak_wrapper.sh → piper-tts → paplay (both X11 and Wayland)
+// PLATFORM LAYER
+// ──────────────
+// All platform-specific IO (region select, screen capture, clipboard, text
+// injection, TTS fallback, path helpers) lives in `src/platform/`, which
+// re-exports the Linux or Windows backend at compile time via cfg. See
+// `platform/mod.rs` for the shared API surface.
 //
 // THREADING MODEL
 // ───────────────
 //   main thread           ← state machine, blocking subprocess calls, dispatch
 //   rdev listener thread  ← sends EventType messages over mpsc channel
 
+mod platform;
+
 use std::{
     collections::HashSet,
     fs,
     io::{BufRead, BufReader, Write},
-    os::unix::net::UnixStream,
-    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
@@ -32,10 +33,18 @@ use std::{
     },
 };
 
+#[cfg(unix)]
+use std::{
+    os::unix::net::UnixStream,
+    os::unix::process::CommandExt,
+};
+
 use anyhow::{Context, Result};
 use rdev::{listen, Event, EventType, Key};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tempfile::NamedTempFile;
+
+use crate::platform::Region;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration — TOML schema
@@ -125,9 +134,11 @@ struct TtsDaemon {
 /// All TTS-related state: daemon connection, active playback, and fallback.
 struct TtsState {
     daemon: Option<TtsDaemon>,
-    /// Persistent socket connection to the daemon.
+    /// Persistent socket connection to the daemon (Unix only).
+    #[cfg(unix)]
     conn: Option<BufReader<UnixStream>>,
-    /// Process-group ID of the current paplay process (for instant kill).
+    /// Process-group ID of the current paplay process (Linux only — for instant kill).
+    #[cfg(unix)]
     paplay_pgid: Option<i32>,
     /// True while audio is actively playing.
     speaking: bool,
@@ -139,7 +150,9 @@ impl TtsState {
     fn new() -> Self {
         Self {
             daemon: None,
+            #[cfg(unix)]
             conn: None,
+            #[cfg(unix)]
             paplay_pgid: None,
             speaking: false,
             fallback_child: None,
@@ -155,7 +168,7 @@ impl TtsState {
 /// Auto-creates with defaults if the file does not exist.
 /// Returns a clear error if the file is malformed.
 fn load_config() -> Result<AppConfig> {
-    let dir  = config_dir();
+    let dir  = platform::config_dir();
     let path = dir.join("config.toml");
 
     if !path.exists() {
@@ -173,28 +186,10 @@ fn load_config() -> Result<AppConfig> {
         .with_context(|| format!("Malformed config at {:?} — fix the TOML then restart", path))
 }
 
-fn config_dir() -> PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
-        format!("{}/.config", std::env::var("HOME").unwrap_or_else(|_| ".".into()))
-    });
-    PathBuf::from(base).join("deck-reader")
-}
-
-fn data_dir() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-        format!("{}/.local/share", std::env::var("HOME").unwrap_or_else(|_| ".".into()))
-    });
-    PathBuf::from(base).join("deck-reader")
-}
-
-/// Expand a path string: "~/" prefix → $HOME/
+/// Expand a path string's leading `~` via `shellexpand::tilde`.
+/// Cross-platform: `$HOME` on Unix, `%USERPROFILE%` on Windows.
 fn expand_path(s: &str) -> PathBuf {
-    if let Some(rest) = s.strip_prefix("~/") {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join(rest)
-    } else {
-        PathBuf::from(s)
-    }
+    PathBuf::from(shellexpand::tilde(s).as_ref())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -434,39 +429,9 @@ fn hotkey_matches(k: Key, hk: (Option<Key>, Key), held: &HashSet<Key>) -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Display server detection
-// ─────────────────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum DisplayServer {
-    X11,
-    Wayland,
-}
-
-/// Detect whether we are running under X11 or Wayland.
-fn detect_display_server() -> DisplayServer {
-    if let Ok(session) = std::env::var("XDG_SESSION_TYPE") {
-        if session.eq_ignore_ascii_case("wayland") {
-            return DisplayServer::Wayland;
-        }
-    }
-    if std::env::var("WAYLAND_DISPLAY").is_ok() {
-        return DisplayServer::Wayland;
-    }
-    DisplayServer::X11
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Region geometry — persistence
+// (the Region struct itself lives in platform::mod.rs as a shared type)
 // ─────────────────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-struct Region {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-}
 
 fn load_region(path: &Path) -> Result<Region> {
     let contents = fs::read_to_string(path).with_context(|| {
@@ -485,123 +450,6 @@ fn save_region(path: &Path, region: &Region) -> Result<()> {
     }
     let json = serde_json::to_string_pretty(region)?;
     fs::write(path, json).with_context(|| format!("Cannot write region to {:?}", path))
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen capture — interactive selection
-//   X11:     slop --format="%w %h %x %y"
-//   Wayland: slurp  (outputs "X,Y WxH")
-// ─────────────────────────────────────────────────────────────────────────────
-
-fn select_region(display: DisplayServer) -> Result<Region> {
-    match display {
-        DisplayServer::X11 => {
-            let output = Command::new("slop")
-                .args(["--format=%w %h %x %y"])
-                .output()
-                .context(
-                    "Failed to run slop. Install: sudo pacman -S slop",
-                )?;
-
-            if !output.status.success() {
-                anyhow::bail!("slop exited non-zero (user cancelled selection?)");
-            }
-
-            let text = String::from_utf8(output.stdout)
-                .context("slop output was not valid UTF-8")?
-                .trim()
-                .to_owned();
-
-            // Parse "W H X Y"
-            let parts: Vec<i32> = text
-                .split_whitespace()
-                .map(|s| s.parse::<i32>())
-                .collect::<std::result::Result<Vec<_>, _>>()
-                .with_context(|| format!("Failed to parse slop geometry: {:?}", text))?;
-
-            if parts.len() != 4 {
-                anyhow::bail!("Unexpected slop output (expected 4 values): {:?}", text);
-            }
-
-            Ok(Region { w: parts[0], h: parts[1], x: parts[2], y: parts[3] })
-        }
-        DisplayServer::Wayland => {
-            let output = Command::new("slurp")
-                .output()
-                .context("Failed to run slurp. Install: sudo pacman -S slurp")?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if stderr.is_empty() {
-                    anyhow::bail!("slurp exited non-zero (user cancelled selection?)");
-                } else {
-                    anyhow::bail!("slurp failed: {}", stderr.trim());
-                }
-            }
-
-            // slurp outputs: "X,Y WxH"
-            let text = String::from_utf8(output.stdout)
-                .context("slurp output was not valid UTF-8")?
-                .trim()
-                .to_owned();
-
-            let parts: Vec<&str> = text.split_whitespace().collect();
-            if parts.len() != 2 {
-                anyhow::bail!("Unexpected slurp output: {:?}", text);
-            }
-
-            let parse_pair = |s: &str, sep: char, label: &str| -> Result<(i32, i32)> {
-                let v: Vec<i32> = s
-                    .split(sep)
-                    .map(|n| n.parse::<i32>())
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .with_context(|| format!("Failed to parse slurp {} {:?}", label, s))?;
-                if v.len() != 2 {
-                    anyhow::bail!("Unexpected slurp {} format: {:?}", label, s);
-                }
-                Ok((v[0], v[1]))
-            };
-
-            let (x, y) = parse_pair(parts[0], ',', "X,Y")?;
-            let (w, h) = parse_pair(parts[1], 'x', "WxH")?;
-
-            Ok(Region { x, y, w, h })
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen capture — known geometry
-//   X11:     maim -g WxH+X+Y output.png
-//   Wayland: grim -g "X,Y WxH" output.png
-// ─────────────────────────────────────────────────────────────────────────────
-
-fn capture_region(display: DisplayServer, region: &Region, output_path: &Path) -> Result<()> {
-    let path_str = output_path.to_string_lossy();
-
-    match display {
-        DisplayServer::X11 => {
-            let geom = format!("{}x{}+{}+{}", region.w, region.h, region.x, region.y);
-            let status = Command::new("maim")
-                .args(["-g", &geom, &*path_str])
-                .status()
-                .context("Failed to run maim. Install: sudo pacman -S maim")?;
-            if !status.success() {
-                anyhow::bail!("maim exited non-zero");
-            }
-        }
-        DisplayServer::Wayland => {
-            let geom = format!("{},{} {}x{}", region.x, region.y, region.w, region.h);
-            let status = Command::new("grim")
-                .args(["-g", &geom, &*path_str])
-                .status()
-                .context("Failed to run grim. Install: sudo pacman -S grim")?;
-            if !status.success() {
-                anyhow::bail!("grim exited non-zero");
-            }
-        }
-    }
-    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -665,67 +513,7 @@ fn parse_delivery_mode(s: &str) -> Result<DeliveryMode> {
     }
 }
 
-/// Copy text to system clipboard.
-///   X11:     xclip -selection clipboard
-///   Wayland: wl-copy
-fn copy_to_clipboard(text: &str, display: DisplayServer) -> Result<()> {
-    let mut child = match display {
-        DisplayServer::X11 => Command::new("xclip")
-            .args(["-selection", "clipboard"])
-            .stdin(Stdio::piped())
-            .spawn()
-            .context("Failed to run xclip. Install: sudo pacman -S xclip")?,
-        DisplayServer::Wayland => Command::new("wl-copy")
-            .stdin(Stdio::piped())
-            .spawn()
-            .context("Failed to run wl-copy. Install: sudo pacman -S wl-clipboard")?,
-    };
-
-    // Write text then close stdin (drop) so the tool sees EOF and exits.
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(text.as_bytes())
-            .context("Failed to write to clipboard stdin")?;
-    }
-
-    let status = child.wait().context("Failed to wait for clipboard tool")?;
-    if !status.success() {
-        anyhow::bail!("clipboard copy exited non-zero");
-    }
-    Ok(())
-}
-
-/// Type text at the current cursor.
-///   X11:     xdotool type
-///   Wayland: ydotool type (requires ydotoold daemon)
-fn type_text(text: &str, display: DisplayServer) -> Result<()> {
-    match display {
-        DisplayServer::X11 => {
-            let status = Command::new("xdotool")
-                .args(["type", "--clearmodifiers", "--delay", "0", "--", text])
-                .status()
-                .context("Failed to run xdotool. Install: sudo pacman -S xdotool")?;
-            if !status.success() {
-                anyhow::bail!("xdotool exited non-zero");
-            }
-        }
-        DisplayServer::Wayland => {
-            let status = Command::new("ydotool")
-                .args(["type", "--", text])
-                .status()
-                .context(
-                    "Failed to run ydotool. Install: sudo pacman -S ydotool\n\
-                     Note: ydotoold daemon must be running.",
-                )?;
-            if !status.success() {
-                anyhow::bail!("ydotool exited non-zero");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn deliver_text(text: &str, mode: DeliveryMode, display: DisplayServer) -> Result<()> {
+fn deliver_text(text: &str, mode: DeliveryMode) -> Result<()> {
     if text.is_empty() {
         println!("[deck-reader] No text extracted.");
         return Ok(());
@@ -733,16 +521,16 @@ fn deliver_text(text: &str, mode: DeliveryMode, display: DisplayServer) -> Resul
 
     match mode {
         DeliveryMode::Clipboard => {
-            copy_to_clipboard(text, display)?;
+            platform::copy_to_clipboard(text)?;
             println!("[deck-reader] Copied {} chars to clipboard.", text.len());
         }
         DeliveryMode::Type => {
-            type_text(text, display)?;
+            platform::type_text(text)?;
             println!("[deck-reader] Typed {} chars at cursor.", text.len());
         }
         DeliveryMode::Both => {
-            copy_to_clipboard(text, display)?;
-            type_text(text, display)?;
+            platform::copy_to_clipboard(text)?;
+            platform::type_text(text)?;
             println!("[deck-reader] Copied + typed {} chars.", text.len());
         }
     }
@@ -750,73 +538,15 @@ fn deliver_text(text: &str, mode: DeliveryMode, display: DisplayServer) -> Resul
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Clipboard reading
-//   X11:     xclip -selection primary/clipboard -o
-//   Wayland: wl-paste [--primary] --no-newline
+// TTS daemon management (Linux only — daemon uses Unix sockets + setsid)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/// Read PRIMARY selection (highlighted text), fall back to CLIPBOARD.
-fn read_clipboard(display: DisplayServer) -> Result<String> {
-    let text = read_selection(display, "primary")?;
-    if !text.is_empty() {
-        return Ok(text);
-    }
-    read_selection(display, "clipboard")
-}
-
-fn read_selection(display: DisplayServer, selection: &str) -> Result<String> {
-    let output = match display {
-        DisplayServer::X11 => {
-            Command::new("xclip")
-                .args(["-selection", selection, "-o"])
-                .output()
-                .context("Failed to run xclip. Install: sudo pacman -S xclip")?
-        }
-        DisplayServer::Wayland => {
-            let mut cmd = Command::new("wl-paste");
-            if selection == "primary" {
-                cmd.arg("--primary");
-            }
-            cmd.arg("--no-newline");
-            cmd.output()
-                .context("Failed to run wl-paste. Install: sudo pacman -S wl-clipboard")?
-        }
-    };
-
-    // xclip / wl-paste exit non-zero when the selection is empty.
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if !stderr.is_empty() {
-            eprintln!("[deck-reader] clipboard stderr: {}", stderr.trim());
-        }
-        return Ok(String::new());
-    }
-
-    Ok(String::from_utf8(output.stdout)
-        .context("Clipboard content was not valid UTF-8")?
-        .trim()
-        .to_owned())
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TTS daemon management
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Compute the Unix socket path for the TTS daemon.
-fn tts_socket_path() -> PathBuf {
-    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        PathBuf::from(runtime_dir).join("deck-reader-tts.sock")
-    } else {
-        let uid = unsafe { libc::getuid() };
-        PathBuf::from(format!("/tmp/deck-reader-tts-{uid}.sock"))
-    }
-}
 
 /// Ensure the TTS daemon is running and `state.daemon` is set.
 ///
 /// On first call, spawns the Python daemon process and waits for its READY
 /// signal.  On subsequent calls, checks if the existing daemon is still alive,
 /// or tries to reconnect to a surviving daemon from a previous session.
+#[cfg(unix)]
 fn ensure_daemon(
     state: &mut TtsState,
     venv_python: &Path,
@@ -838,7 +568,7 @@ fn ensure_daemon(
         state.conn = None;
     }
 
-    let socket_path = tts_socket_path();
+    let socket_path = platform::tts_socket_path();
 
     // Try connecting to an existing daemon (survives deck-reader restarts).
     if socket_path.exists() {
@@ -937,6 +667,7 @@ fn ensure_daemon(
 }
 
 /// Ensure we have an active socket connection to the daemon.
+#[cfg(unix)]
 fn ensure_connection(state: &mut TtsState) -> Result<()> {
     if state.conn.is_some() {
         return Ok(());
@@ -975,103 +706,116 @@ fn request_tts(
     // If currently speaking, stop first.
     stop_tts(state);
 
-    // Try the daemon path.
-    if let Err(e) = ensure_daemon(state, venv_python, daemon_script, models_dir) {
-        eprintln!("[deck-reader] Daemon unavailable ({e}), using fallback.");
-        let child = spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
-        state.fallback_child = Some(child);
-        state.speaking = true;
-        return Ok(());
-    }
-    println!("[deck-reader] TIMING ensure_daemon={}ms", t0.elapsed().as_millis());
-
-    if let Err(e) = ensure_connection(state) {
-        eprintln!("[deck-reader] Cannot connect to daemon ({e}), using fallback.");
-        state.daemon = None;
-        state.conn = None;
-        let child = spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
-        state.fallback_child = Some(child);
-        state.speaking = true;
-        return Ok(());
-    }
-
-    // Build and send the JSON request.
-    let request = serde_json::json!({
-        "text": text,
-        "voice": voice,
-        "speed": speed,
-    });
-    let request_line = format!("{}\n", request);
-
-    let conn = state.conn.as_mut().unwrap();
-    if let Err(e) = conn.get_mut().write_all(request_line.as_bytes()) {
-        eprintln!("[deck-reader] Socket write failed ({e}), resetting daemon connection.");
-        state.conn = None;
-        // One retry: reconnect and resend.
-        if ensure_connection(state).is_ok() {
-            let conn = state.conn.as_mut().unwrap();
-            if let Err(e2) = conn.get_mut().write_all(request_line.as_bytes()) {
-                eprintln!("[deck-reader] Socket write retry failed ({e2}), using fallback.");
-                state.conn = None;
-                let child = spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
-                state.fallback_child = Some(child);
-                state.speaking = true;
-                return Ok(());
-            }
-        } else {
-            state.daemon = None;
-            let child = spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
+    // ── Daemon path (Linux only) ──────────────────────────────────────────────
+    #[cfg(unix)]
+    {
+        if let Err(e) = ensure_daemon(state, venv_python, daemon_script, models_dir) {
+            eprintln!("[deck-reader] Daemon unavailable ({e}), using fallback.");
+            let child = platform::spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
             state.fallback_child = Some(child);
             state.speaking = true;
             return Ok(());
         }
-    }
+        println!("[deck-reader] TIMING ensure_daemon={}ms", t0.elapsed().as_millis());
 
-    // Read the daemon's response (blocking — should arrive quickly).
-    let conn = state.conn.as_mut().unwrap();
-    conn.get_ref().set_nonblocking(false)?;
-    let mut response_line = String::new();
-    conn.read_line(&mut response_line)?;
-
-    let resp: serde_json::Value = serde_json::from_str(response_line.trim())
-        .with_context(|| format!("Bad daemon response: {:?}", response_line))?;
-
-    match resp.get("status").and_then(|s| s.as_str()) {
-        Some("playing") => {
-            if let Some(pgid) = resp.get("pgid").and_then(|p| p.as_i64()) {
-                state.paplay_pgid = Some(pgid as i32);
-            }
+        if let Err(e) = ensure_connection(state) {
+            eprintln!("[deck-reader] Cannot connect to daemon ({e}), using fallback.");
+            state.daemon = None;
+            state.conn = None;
+            let child = platform::spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
+            state.fallback_child = Some(child);
             state.speaking = true;
-            println!(
-                "[deck-reader] TIMING request_tts → playing in {}ms",
-                t0.elapsed().as_millis()
-            );
-            // Switch to non-blocking so the event loop can poll for "done".
-            conn.get_ref().set_nonblocking(true)?;
+            return Ok(());
         }
-        Some("done") => {
-            // Empty text or instant completion — nothing playing.
-            state.speaking = false;
+
+        // Build and send the JSON request.
+        let request = serde_json::json!({
+            "text": text,
+            "voice": voice,
+            "speed": speed,
+        });
+        let request_line = format!("{}\n", request);
+
+        let conn = state.conn.as_mut().unwrap();
+        if let Err(e) = conn.get_mut().write_all(request_line.as_bytes()) {
+            eprintln!("[deck-reader] Socket write failed ({e}), resetting daemon connection.");
+            state.conn = None;
+            // One retry: reconnect and resend.
+            if ensure_connection(state).is_ok() {
+                let conn = state.conn.as_mut().unwrap();
+                if let Err(e2) = conn.get_mut().write_all(request_line.as_bytes()) {
+                    eprintln!("[deck-reader] Socket write retry failed ({e2}), using fallback.");
+                    state.conn = None;
+                    let child = platform::spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
+                    state.fallback_child = Some(child);
+                    state.speaking = true;
+                    return Ok(());
+                }
+            } else {
+                state.daemon = None;
+                let child = platform::spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
+                state.fallback_child = Some(child);
+                state.speaking = true;
+                return Ok(());
+            }
         }
-        Some("error") => {
-            let msg = resp
-                .get("msg")
-                .and_then(|m| m.as_str())
-                .unwrap_or("unknown");
-            anyhow::bail!("TTS daemon error: {msg}");
+
+        // Read the daemon's response (blocking — should arrive quickly).
+        let conn = state.conn.as_mut().unwrap();
+        conn.get_ref().set_nonblocking(false)?;
+        let mut response_line = String::new();
+        conn.read_line(&mut response_line)?;
+
+        let resp: serde_json::Value = serde_json::from_str(response_line.trim())
+            .with_context(|| format!("Bad daemon response: {:?}", response_line))?;
+
+        match resp.get("status").and_then(|s| s.as_str()) {
+            Some("playing") => {
+                if let Some(pgid) = resp.get("pgid").and_then(|p| p.as_i64()) {
+                    state.paplay_pgid = Some(pgid as i32);
+                }
+                state.speaking = true;
+                println!(
+                    "[deck-reader] TIMING request_tts → playing in {}ms",
+                    t0.elapsed().as_millis()
+                );
+                // Switch to non-blocking so the event loop can poll for "done".
+                conn.get_ref().set_nonblocking(true)?;
+            }
+            Some("done") => {
+                // Empty text or instant completion — nothing playing.
+                state.speaking = false;
+            }
+            Some("error") => {
+                let msg = resp
+                    .get("msg")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("unknown");
+                anyhow::bail!("TTS daemon error: {msg}");
+            }
+            _ => {
+                anyhow::bail!("Unexpected daemon response: {response_line}");
+            }
         }
-        _ => {
-            anyhow::bail!("Unexpected daemon response: {response_line}");
-        }
+
+        Ok(())
     }
 
-    Ok(())
+    // ── Fallback path (Windows — daemon not supported in MVP) ─────────────────
+    #[cfg(windows)]
+    {
+        let child = platform::spawn_tts_fallback(text, voice, speed, tts_wrapper)?;
+        state.fallback_child = Some(child);
+        state.speaking = true;
+        Ok(())
+    }
 }
 
 /// Poll the daemon socket for a "done" message (non-blocking).
 /// Returns true if TTS finished playing.
 fn poll_tts_done(state: &mut TtsState) -> bool {
-    // Daemon path: non-blocking read.
+    // Daemon path: non-blocking read (Linux only).
+    #[cfg(unix)]
     if state.speaking && state.conn.is_some() && state.fallback_child.is_none() {
         let conn = state.conn.as_mut().unwrap();
         let mut line = String::new();
@@ -1121,7 +865,8 @@ fn poll_tts_done(state: &mut TtsState) -> bool {
 
 /// Stop any active TTS playback immediately.
 fn stop_tts(state: &mut TtsState) {
-    // Daemon path: kill paplay process group.
+    // Daemon path: kill paplay process group (Linux only).
+    #[cfg(unix)]
     if let Some(pgid) = state.paplay_pgid.take() {
         println!("[deck-reader] Stopping TTS…");
         unsafe { libc::kill(-pgid, libc::SIGKILL); }
@@ -1140,9 +885,9 @@ fn stop_tts(state: &mut TtsState) {
         }
     }
 
-    // Fallback path: kill the wrapper process group.
+    // Fallback path: kill the subprocess (cross-platform).
     if let Some(ref mut child) = state.fallback_child.take() {
-        kill_tts_fallback(child);
+        platform::kill_tts_fallback(child);
         state.speaking = false;
     }
 }
@@ -1151,65 +896,30 @@ fn stop_tts(state: &mut TtsState) {
 fn shutdown_daemon(state: &mut TtsState) {
     stop_tts(state);
 
-    // Send graceful shutdown command.
-    if let Some(ref mut conn) = state.conn {
-        let _ = conn.get_mut().set_nonblocking(false);
-        let _ = conn.get_mut().write_all(b"{\"cmd\":\"shutdown\"}\n");
-    }
-    state.conn = None;
-
-    if let Some(ref mut daemon) = state.daemon {
-        // Give it 500ms to exit gracefully, then force-kill.
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        if let Some(ref mut process) = daemon.process {
-            if matches!(process.try_wait(), Ok(None)) {
-                let pid = process.id() as i32;
-                unsafe { libc::kill(-pid, libc::SIGKILL); }
-                let _ = process.wait();
-            }
+    // Daemon teardown (Linux only).
+    #[cfg(unix)]
+    {
+        // Send graceful shutdown command.
+        if let Some(ref mut conn) = state.conn {
+            let _ = conn.get_mut().set_nonblocking(false);
+            let _ = conn.get_mut().write_all(b"{\"cmd\":\"shutdown\"}\n");
         }
-        let _ = fs::remove_file(&daemon.socket_path);
+        state.conn = None;
+
+        if let Some(ref mut daemon) = state.daemon {
+            // Give it 500ms to exit gracefully, then force-kill.
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Some(ref mut process) = daemon.process {
+                if matches!(process.try_wait(), Ok(None)) {
+                    let pid = process.id() as i32;
+                    unsafe { libc::kill(-pid, libc::SIGKILL); }
+                    let _ = process.wait();
+                }
+            }
+            let _ = fs::remove_file(&daemon.socket_path);
+        }
     }
     state.daemon = None;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TTS fallback (cold-start subprocess, used when daemon is unavailable)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Spawn tts_speak_wrapper.sh as a detached subprocess (fallback path).
-fn spawn_tts_fallback(text: &str, voice: &str, speed: f32, wrapper: &Path) -> Result<Child> {
-    // SAFETY: setsid() is async-signal-safe and has no preconditions.
-    let child = unsafe {
-        Command::new(wrapper)
-            .arg(text)
-            .arg(voice)
-            .arg(speed.to_string())
-            .pre_exec(|| {
-                if libc::setsid() == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            })
-            .spawn()
-            .with_context(|| {
-                format!(
-                    "Failed to run TTS wrapper at {:?}. Did you run install.sh?",
-                    wrapper
-                )
-            })?
-    };
-
-    Ok(child)
-}
-
-/// Kill a fallback TTS subprocess and all its children.
-fn kill_tts_fallback(child: &mut Child) {
-    if let Ok(Some(_)) = child.try_wait() { return; }
-    println!("[deck-reader] Stopping TTS (fallback)…");
-    let pid = child.id() as i32;
-    unsafe { libc::kill(-pid, libc::SIGKILL); }
-    let _ = child.wait();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1296,7 +1006,6 @@ fn run_detect_keys() -> Result<()> {
 /// Capture region → OCR → deliver text → auto-speak.
 #[allow(clippy::too_many_arguments)]
 fn run_ocr_pipeline(
-    display:        DisplayServer,
     region:         &Region,
     ocr_wrapper:    &Path,
     lang:           &str,
@@ -1313,14 +1022,14 @@ fn run_ocr_pipeline(
     // 1. Capture region to a temp PNG (auto-deleted when `tmp` drops).
     let tmp = NamedTempFile::with_suffix(".png")
         .context("Could not create temporary PNG file")?;
-    capture_region(display, region, tmp.path())?;
+    platform::capture_region(region, tmp.path())?;
 
     // 2. OCR
     let text = ocr_extract(tmp.path(), ocr_wrapper, lang, cleanup)?;
     let char_count = text.len();
 
     // 3. Deliver text
-    deliver_text(&text, delivery_mode, display)?;
+    deliver_text(&text, delivery_mode)?;
 
     // 4. TTS (non-blocking — stop previous if still playing, then start new)
     if !text.is_empty() {
@@ -1345,9 +1054,6 @@ fn main() -> Result<()> {
         return run_detect_keys();
     }
 
-    // ── Detect display server ─────────────────────────────────────────────────
-    let display = detect_display_server();
-
     // ── Load and validate config ─────────────────────────────────────────────
     let cfg = load_config()?;
 
@@ -1365,19 +1071,27 @@ fn main() -> Result<()> {
         .region_file
         .as_deref()
         .map(expand_path)
-        .unwrap_or_else(|| data_dir().join("last_region.json"));
+        .unwrap_or_else(|| platform::data_dir().join("last_region.json"));
 
     let exe      = std::env::current_exe().unwrap_or_default();
     let bin_dir  = exe.parent().unwrap_or_else(|| Path::new("."));
-    let tts_wrapper   = bin_dir.join("tts_speak_wrapper.sh");
-    let ocr_wrapper   = bin_dir.join("ocr_extract_wrapper.sh");
+    #[cfg(unix)]
+    let tts_wrapper = bin_dir.join("tts_speak_wrapper.sh");
+    #[cfg(windows)]
+    let tts_wrapper = bin_dir.join("tts_speak_wrapper.bat"); // unused on Windows (spawn_tts_fallback ignores it)
+
+    #[cfg(unix)]
+    let ocr_wrapper = bin_dir.join("ocr_extract_wrapper.sh");
+    #[cfg(windows)]
+    let ocr_wrapper = bin_dir.join("ocr_extract_wrapper.bat");
+
     let daemon_script = bin_dir.join("tts_daemon.py");
     let venv_python   = cfg.paths.venv_dir.as_deref()
         .map(|s| expand_path(s).join("bin/python3"))
-        .unwrap_or_else(|| data_dir().join("venv/bin/python3"));
+        .unwrap_or_else(|| platform::data_dir().join("venv/bin/python3"));
     let models_dir    = cfg.paths.models_dir.as_deref()
         .map(expand_path)
-        .unwrap_or_else(|| data_dir().join("models"));
+        .unwrap_or_else(|| platform::data_dir().join("models"));
 
     let delivery_mode = parse_delivery_mode(&cfg.ocr.delivery_mode)?;
     let has_region    = region_file.exists();
@@ -1399,15 +1113,15 @@ fn main() -> Result<()> {
     println!("║  TTS speed  : {:<38}║", cfg.tts.speed);
     println!("║  OCR lang   : {:<38}║", cfg.ocr.language);
     println!("║  Delivery   : {:<38}║", cfg.ocr.delivery_mode);
-    println!("║  Display    : {:<38}║", match display {
-        DisplayServer::X11 => "X11 (slop/maim/xclip)",
-        DisplayServer::Wayland => "Wayland (slurp/grim/wl-paste)",
-    });
+    println!("║  Display    : {:<38}║", platform::backend_description());
     println!("╠══════════════════════════════════════════════════════╣");
     println!("║  Region : {:<42}║",
         if has_region { "saved (ready for Alt+I)" } else { "none — use Alt+U first" });
+    #[cfg(unix)]
     println!("║  TTS dmn: {:<42}║",
         if daemon_script.exists() { "found (fast path)" } else { "MISSING — fallback mode" });
+    #[cfg(windows)]
+    println!("║  TTS dmn: {:<42}║", "not supported (Windows MVP — fallback only)");
     println!("║  TTS wrp: {:<42}║",
         if tts_wrapper.exists() { "found" } else { "MISSING — run install.sh" });
     println!("║  OCR wrp: {:<42}║",
@@ -1417,27 +1131,29 @@ fn main() -> Result<()> {
     println!("║  Ctrl-C to quit                                       ║");
     println!("╚══════════════════════════════════════════════════════╝");
 
-    // ── GUI window ───────────────────────────────────────────────────────────
-    // Spawn a Tk window so the user can see status and click Quit.
-    // Status updates are sent as "key:value\n" lines to the GUI's stdin.
-    let gui_script = bin_dir.join("gui_window.py");
+    // ── GUI window (Linux only) ──────────────────────────────────────────────
+    // Spawn a Tk status window on Linux. Skipped on Windows (deferred to phase 2).
     let mut gui_stdin: Option<std::process::ChildStdin> = None;
     let mut gui_child: Option<Child> = None;
-    if gui_script.exists() {
-        match Command::new(&venv_python)
-            .arg(&gui_script)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(mut child) => {
-                gui_stdin = child.stdin.take();
-                gui_child = Some(child);
-                println!("[deck-reader] GUI window launched.");
-            }
-            Err(e) => {
-                eprintln!("[deck-reader] Could not launch GUI (continuing headless): {e}");
+    #[cfg(unix)]
+    {
+        let gui_script = bin_dir.join("gui_window.py");
+        if gui_script.exists() {
+            match Command::new(&venv_python)
+                .arg(&gui_script)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    gui_stdin = child.stdin.take();
+                    gui_child = Some(child);
+                    println!("[deck-reader] GUI window launched.");
+                }
+                Err(e) => {
+                    eprintln!("[deck-reader] Could not launch GUI (continuing headless): {e}");
+                }
             }
         }
     }
@@ -1512,7 +1228,7 @@ fn main() -> Result<()> {
                     println!("[deck-reader] Select a screen region (draw a rectangle)…");
 
                     gui_send!(gui_stdin, "status:Selecting region...");
-                    match select_region(display) {
+                    match platform::select_region() {
                         Ok(region) => {
                             if let Err(e) = save_region(&region_file, &region) {
                                 eprintln!("[deck-reader] Could not save region: {e}");
@@ -1524,7 +1240,6 @@ fn main() -> Result<()> {
                             }
                             gui_send!(gui_stdin, "status:Running OCR...");
                             match run_ocr_pipeline(
-                                display,
                                 &region,
                                 &ocr_wrapper,
                                 &cfg.ocr.language,
@@ -1573,7 +1288,6 @@ fn main() -> Result<()> {
                                 region.w, region.h, region.x, region.y
                             );
                             match run_ocr_pipeline(
-                                display,
                                 &region,
                                 &ocr_wrapper,
                                 &cfg.ocr.language,
@@ -1617,7 +1331,7 @@ fn main() -> Result<()> {
                         println!("[deck-reader] TTS stopped.");
                     } else {
                         // Idle — read selection and speak.
-                        match read_clipboard(display) {
+                        match platform::read_clipboard() {
                             Ok(text) if !text.is_empty() => {
                                 gui_send!(gui_stdin, "tts:speaking");
                                 if let Err(e) = request_tts(

@@ -10,7 +10,7 @@ A collection of open-source desktop utilities for OCR, text-to-speech, screen ca
 | [voice-prompt](linux/voice-prompt/) | Push-to-talk speech-to-text (Whisper, offline) | Linux, SteamDeck |
 | [voice-speak](linux/voice-speak/) | TTS for highlighted text (Piper, offline) | Linux, SteamDeck |
 | [screen-ocr](linux/screen-ocr/) | Hotkey-triggered screen region OCR + TTS | Linux, SteamDeck |
-| [deck-reader](steamdeck/deck-reader/) | Multi-hotkey OCR + TTS unified tool | SteamDeck |
+| [deck-reader](steamdeck/deck-reader/) | Multi-hotkey OCR + TTS unified tool | SteamDeck, Windows |
 | [book-digitize](linux/book-digitize/) | Video-to-markdown OCR for lectures/books | Linux |
 | [gamebook-digitize](linux/gamebook-digitize/) | Gamebook video to interactive HTML | Linux |
 | [book-reader](android/book-reader/) | OCR + TTS book reader app | Android |
@@ -20,7 +20,7 @@ A collection of open-source desktop utilities for OCR, text-to-speech, screen ca
 ## Platforms
 
 - **[Linux](linux/)** — X11 desktop tools (8 tools)
-- **[Windows](windows/)** — Windows-compatible tools (1 tool)
+- **[Windows](windows/)** — Windows-compatible tools (2 tools)
 - **[SteamDeck](steamdeck/)** — SteamOS/Wayland variants (5 tools)
 - **[Android](android/)** — Android apps (1 tool)
 

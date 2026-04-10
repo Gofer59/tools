@@ -4,7 +4,8 @@ Outil multi-raccourcis d'OCR d'ecran + synthese vocale pour le Mode Bureau du St
 
 ## Plateforme
 
-SteamDeck (SteamOS 3.x / KDE Plasma / Wayland)
+- **SteamDeck / SteamOS 3.x** — cible principale (KDE Plasma / Wayland)
+- **Windows 10 / Windows 11** — support MVP (presse-papiers uniquement, pas de daemon TTS persistant)
 
 ## Prerequis
 
@@ -199,6 +200,78 @@ deck-reader/
 - Les applications Electron (Discord, VS Code) ne renseignent pas la selection PRIMARY Wayland -- utilisez Ctrl+C d'abord, puis Alt+Y
 - Le binaire doit etre compile en croix sur une machine de developpement (SteamOS ne possede pas les en-tetes de developpement par defaut)
 - `slurp` peut ne pas apparaitre si un jeu detient un verrou de compositeur en plein ecran exclusif
+
+---
+
+## Installation Windows
+
+### Prerequis
+
+- **Python 3.10+** — [python.org](https://www.python.org/downloads/) (ajouter au PATH lors de l'installation)
+- **Rust / cargo** — [rustup.rs](https://rustup.rs/)
+- **winget** — inclus dans Windows 10 1809+ / Windows 11 (mettre a jour via Microsoft Store → App Installer)
+
+### Installer
+
+Depuis une session PowerShell elevee (clic droit → « Executer en tant qu'administrateur ») :
+
+```powershell
+cd deck-reader
+.\install.bat
+```
+
+Ou sans le wrapper :
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process
+.\install.ps1
+```
+
+L'installateur va :
+1. Verifier les prerequis (Python, Rust, winget)
+2. Installer Tesseract OCR via `winget install UB-Mannheim.TesseractOCR`
+3. Compiler le binaire Rust (`cargo build --release`)
+4. Copier le binaire + scripts wrapper dans `%LOCALAPPDATA%\deck-reader\bin\`
+5. Creer un venv Python a `%LOCALAPPDATA%\deck-reader\venv\` et installer les dependances
+6. Copier les scripts Python dans `%LOCALAPPDATA%\deck-reader\python\`
+7. Telecharger le modele vocal Piper `en_US-lessac-medium` (~65 Mo depuis HuggingFace)
+8. Ecrire une config par defaut dans `%APPDATA%\deck-reader\config.toml`
+9. Creer un raccourci dans le menu Demarrer
+
+### Utilisation (Windows)
+
+| Raccourci | Action |
+|-----------|--------|
+| `Alt + U` | Selectionner une region — overlay plein ecran, dessiner un rectangle, OCR + presse-papiers |
+| `Alt + I` | Re-OCR de la derniere region sauvegardee → presse-papiers |
+| `Alt + Y` | Bascule TTS — lit le texte du presse-papiers, ou arrete si deja en lecture |
+
+### Limitations Windows (MVP)
+
+- `delivery_mode = "clipboard"` uniquement — l'injection de texte (`"type"` / `"both"`) n'est pas encore implementee
+- Pas de daemon TTS persistant — chaque requete TTS subit un delai de demarrage Piper de ~3–5 s
+- Pas de fenetre de statut GUI — fonctionnement en mode console uniquement
+- La selection de region multi-ecran est limitee a l'ecran contenant le point de depart du glisser
+
+### Fichiers installes (Windows)
+
+| Chemin | Role |
+|--------|------|
+| `%LOCALAPPDATA%\deck-reader\bin\deck-reader.exe` | Binaire compile |
+| `%LOCALAPPDATA%\deck-reader\bin\ocr_extract_wrapper.bat` | Wrapper OCR |
+| `%LOCALAPPDATA%\deck-reader\venv\` | Environnement virtuel Python |
+| `%LOCALAPPDATA%\deck-reader\models\` | Modeles vocaux ONNX Piper |
+| `%LOCALAPPDATA%\deck-reader\python\` | Scripts Python |
+| `%LOCALAPPDATA%\deck-reader\last_region.json` | Region OCR persistee |
+| `%APPDATA%\deck-reader\config.toml` | Configuration |
+
+### Avertissement SmartScreen
+
+Le binaire non signe declenchera Windows Defender SmartScreen au premier lancement.
+Pour contourner : clic droit sur `deck-reader.exe` → Proprietes → cocher **Debloquer** → OK.
+Ou lancez depuis un terminal — SmartScreen ne s'active que pour les lancements GUI.
+
+---
 
 ## Licence
 

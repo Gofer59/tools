@@ -4,7 +4,8 @@ Multi-hotkey screen OCR + text-to-speech tool for SteamDeck Desktop Mode. Listen
 
 ## Platform
 
-SteamDeck (SteamOS 3.x / KDE Plasma / Wayland)
+- **SteamDeck / SteamOS 3.x** — primary target (KDE Plasma / Wayland)
+- **Windows 10 / Windows 11** — MVP support (clipboard only, no persistent TTS daemon)
 
 ## Prerequisites
 
@@ -199,6 +200,86 @@ deck-reader/
 - Electron apps (Discord, VS Code) do not populate the Wayland PRIMARY selection -- use Ctrl+C first, then Alt+Y
 - The binary must be cross-compiled on a dev machine (SteamOS lacks development headers by default)
 - `slurp` may not appear if a game holds an exclusive fullscreen compositor lock
+
+---
+
+## Windows Installation
+
+### Prerequisites
+
+- **Python 3.10+** — [python.org](https://www.python.org/downloads/) (add to PATH during install)
+- **Rust / cargo** — [rustup.rs](https://rustup.rs/)
+- **winget** — included in Windows 10 1809+ / Windows 11 (update via Microsoft Store → App Installer)
+
+### Install
+
+From an elevated PowerShell session (right-click → "Run as Administrator"):
+
+```powershell
+cd deck-reader
+.\install.bat
+```
+
+Or without the wrapper:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process
+.\install.ps1
+```
+
+The installer will:
+1. Verify prerequisites (Python, Rust, winget)
+2. Install Tesseract OCR via `winget install UB-Mannheim.TesseractOCR`
+3. Build the Rust binary (`cargo build --release`)
+4. Copy binary + wrapper scripts to `%LOCALAPPDATA%\deck-reader\bin\`
+5. Create a Python venv at `%LOCALAPPDATA%\deck-reader\venv\` and install dependencies
+6. Copy Python scripts to `%LOCALAPPDATA%\deck-reader\python\`
+7. Download the Piper voice model `en_US-lessac-medium` (~65 MB from HuggingFace)
+8. Write a default config to `%APPDATA%\deck-reader\config.toml`
+9. Create a Start Menu shortcut
+
+### Skip model download
+
+If you already have the model or want to download it manually:
+
+```powershell
+.\install.ps1 -SkipModel
+```
+
+### Usage (Windows)
+
+| Hotkey | Action |
+|--------|--------|
+| `Alt + U` | Select region — fullscreen overlay, drag a rectangle, OCR + clipboard |
+| `Alt + I` | Re-OCR last saved region → clipboard |
+| `Alt + Y` | Toggle TTS — speaks clipboard text, or stops if already speaking |
+
+### Windows limitations (MVP)
+
+- `delivery_mode = "clipboard"` only — text injection (`"type"` / `"both"`) not yet implemented
+- Persistent TTS daemon not available — each TTS request pays a ~3–5 s Piper cold-start delay
+- GUI status window not shown — headless operation only (console output)
+- Multi-monitor region selection is limited to the monitor containing the drag start point
+
+### Windows file layout
+
+| Path | Purpose |
+|------|---------|
+| `%LOCALAPPDATA%\deck-reader\bin\deck-reader.exe` | Compiled binary |
+| `%LOCALAPPDATA%\deck-reader\bin\ocr_extract_wrapper.bat` | OCR helper wrapper |
+| `%LOCALAPPDATA%\deck-reader\venv\` | Python virtual environment |
+| `%LOCALAPPDATA%\deck-reader\models\` | Piper ONNX voice models |
+| `%LOCALAPPDATA%\deck-reader\python\` | Python scripts |
+| `%LOCALAPPDATA%\deck-reader\last_region.json` | Persisted OCR region |
+| `%APPDATA%\deck-reader\config.toml` | Configuration |
+
+### SmartScreen warning
+
+The unsigned binary will trigger Windows Defender SmartScreen on first run.
+To bypass: right-click `deck-reader.exe` → Properties → check **Unblock** → OK.
+Alternatively, launch from a terminal — SmartScreen only prompts for GUI launches.
+
+---
 
 ## License
 
