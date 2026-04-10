@@ -10,7 +10,7 @@ Une collection d'utilitaires de bureau open-source pour l'OCR, la synthese vocal
 | [voice-prompt](linux/voice-prompt/) | Dictee vocale appuyer-pour-parler (Whisper, hors ligne) | Linux, SteamDeck |
 | [voice-speak](linux/voice-speak/) | Synthese vocale du texte selectionne (Piper, hors ligne) | Linux, SteamDeck |
 | [screen-ocr](linux/screen-ocr/) | OCR de region d'ecran par raccourci + synthese vocale | Linux, SteamDeck |
-| [deck-reader](steamdeck/deck-reader/) | Outil unifie OCR + synthese vocale multi-raccourcis | SteamDeck, Windows |
+| [deck-reader](steamdeck/deck-reader/) | Outil unifie OCR + synthese vocale multi-raccourcis | [SteamDeck](steamdeck/deck-reader/), [Windows](windows/deck-reader/) |
 | [book-digitize](linux/book-digitize/) | OCR video-vers-markdown pour cours/livres | Linux |
 | [gamebook-digitize](linux/gamebook-digitize/) | Video de livre-jeu vers HTML interactif | Linux |
 | [book-reader](android/book-reader/) | Application de lecture OCR + synthese vocale | Android |
