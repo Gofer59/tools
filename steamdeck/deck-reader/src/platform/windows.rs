@@ -15,6 +15,9 @@ use anyhow::{anyhow, Context, Result};
 
 use super::{Region, Selection};
 
+// serde_json is used by select_region() to parse the subprocess JSON output.
+use serde_json;
+
 pub fn backend_description() -> &'static str {
     "Windows (egui/xcap/arboard)"
 }
@@ -164,10 +167,56 @@ impl eframe::App for RegionSelector {
     }
 }
 
-/// Open a fullscreen transparent overlay and let the user drag a rectangle.
-/// Returns the selected region in physical screen coordinates, or an error
-/// if the user presses Esc or if eframe itself fails.
+// ── Subprocess entry point ────────────────────────────────────────────────────
+//
+// eframe::run_native() hangs on Windows when called from a process that has
+// an active rdev WH_KEYBOARD_LL hook, because eframe's Win32 message loop
+// conflicts with the hook thread's GetMessage pump.
+//
+// Fix: run the overlay in a fresh subprocess (--_select-region flag).
+// The subprocess has no rdev hook, so eframe initialises cleanly.
+// select_region() spawns self with that flag and reads the result from stdout.
+
+/// Called from main() when the `--_select-region` flag is present.
+/// Runs the egui overlay, prints the selected region as JSON to stdout, exits.
+pub fn run_as_region_selector() -> ! {
+    match run_region_selector_ui() {
+        Ok(Some(r)) => {
+            // Print the region as a JSON line so select_region() can parse it.
+            println!(r#"{{"x":{},"y":{},"w":{},"h":{}}}"#, r.x, r.y, r.w, r.h);
+            std::process::exit(0);
+        }
+        _ => std::process::exit(1),
+    }
+}
+
+/// Spawn ourselves with `--_select-region` and parse the JSON result.
 pub fn select_region() -> Result<Region> {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW: the subprocess shows the egui overlay but no console.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let exe = std::env::current_exe()
+        .context("Cannot determine current executable path")?;
+
+    let output = Command::new(&exe)
+        .arg("--_select-region")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .context("Failed to spawn region selector subprocess")?;
+
+    if !output.status.success() {
+        anyhow::bail!("Region selection cancelled");
+    }
+
+    let json = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str::<Region>(json.trim())
+        .context("Invalid region JSON from selector subprocess")
+}
+
+/// Run the egui fullscreen overlay and return the selected Region (or None on Esc).
+/// Called only inside the subprocess started by select_region().
+fn run_region_selector_ui() -> Result<Option<Region>> {
     let monitors = xcap::Monitor::all().context("Failed to enumerate monitors")?;
     if monitors.is_empty() {
         anyhow::bail!("No monitors found");
@@ -191,9 +240,6 @@ pub fn select_region() -> Result<Region> {
             .with_inner_size([virt_w, virt_h])
             .with_decorations(false)
             .with_always_on_top(),
-            // Note: with_transparent(true) causes a GPU hang / black screen on
-            // Windows (DWM transparent swapchain init fails silently).
-            // The overlay uses an opaque dark background instead.
         ..Default::default()
     };
 
@@ -204,10 +250,7 @@ pub fn select_region() -> Result<Region> {
     )
     .map_err(|e| anyhow!("Region selector error: {e}"))?;
 
-    match result_rx.try_recv() {
-        Ok(Some(region)) => Ok(region),
-        _ => anyhow::bail!("Region selection cancelled"),
-    }
+    Ok(result_rx.try_recv().ok().flatten())
 }
 
 pub fn capture_region(region: &Region, output_path: &Path) -> Result<()> {

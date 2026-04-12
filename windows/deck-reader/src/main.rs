@@ -1062,6 +1062,16 @@ fn run_ocr_pipeline(
 
 fn main() -> Result<()> {
     // ── CLI flags ────────────────────────────────────────────────────────────
+
+    // Windows: region selector runs in a subprocess to avoid Win32 message-loop
+    // conflicts between eframe and the rdev WH_KEYBOARD_LL hook thread.
+    // select_region() spawns `deck-reader.exe --_select-region`; the subprocess
+    // calls run_as_region_selector() and exits — it never reaches the main loop.
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == "--_select-region") {
+        platform::run_as_region_selector(); // diverges (calls process::exit)
+    }
+
     if std::env::args().any(|a| a == "--detect-keys") {
         return run_detect_keys();
     }
