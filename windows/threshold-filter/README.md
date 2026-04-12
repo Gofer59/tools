@@ -83,7 +83,7 @@ Controls are in a narrow vertical panel on the left side. The thresholded image 
 | **F10** | Re-select window and area |
 | **F9** | Toggle always-on-top |
 
-Hotkeys work globally -- they are detected even when another window is focused (e.g. a game). Configurable via the config file.
+Hotkeys work globally -- they are detected even when another window is focused (e.g. a game), including games with anti-cheat software such as Genshin Impact. Hotkeys use Win32 `RegisterHotKey` (not a low-level hook), so they cannot be blocked by anti-cheat. Configurable via the config file.
 
 ## Configuration
 
@@ -129,7 +129,7 @@ Modifier combos use `+` as separator: `ControlLeft+F5`, `AltLeft+KeyU`.
 
 ```
 src/
-  main.rs          Entry point, global hotkey listener (rdev), eframe window setup
+  main.rs          Entry point, global hotkeys (Win32 RegisterHotKey), eframe window setup
   config.rs        TOML config: hotkeys, display defaults, %APPDATA% path resolution
   capture.rs       Per-window capture via xcap (WGC backend on Windows)
   processing.rs    Binary threshold (BT.601 luminance, fixed-point arithmetic)

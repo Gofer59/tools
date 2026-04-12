@@ -83,7 +83,7 @@ Les controles sont dans un panneau vertical etroit a gauche. L'image seuillee re
 | **F10** | Re-selectionner fenetre et zone |
 | **F9** | Activer/desactiver le mode toujours au premier plan |
 
-Les raccourcis fonctionnent globalement -- ils sont detectes meme quand une autre fenetre est active (par exemple un jeu). Configurables via le fichier de configuration.
+Les raccourcis fonctionnent globalement -- ils sont detectes meme quand une autre fenetre est active (par exemple un jeu), y compris les jeux avec logiciel anti-triche comme Genshin Impact. Les raccourcis utilisent Win32 `RegisterHotKey` (pas un hook bas niveau), ils ne peuvent donc pas etre bloques par l'anti-triche. Configurables via le fichier de configuration.
 
 ## Configuration
 
@@ -129,7 +129,7 @@ Les combinaisons avec modificateur utilisent `+` comme separateur : `ControlLeft
 
 ```
 src/
-  main.rs          Point d'entree, listener de hotkeys globaux (rdev), configuration eframe
+  main.rs          Point d'entree, hotkeys globaux (Win32 RegisterHotKey), configuration eframe
   config.rs        Configuration TOML : hotkeys, parametres d'affichage, resolution du chemin %APPDATA%
   capture.rs       Capture par fenetre via xcap (backend WGC sous Windows)
   processing.rs    Seuillage binaire (luminance BT.601, arithmetique en virgule fixe)
