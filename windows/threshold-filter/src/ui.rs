@@ -334,6 +334,9 @@ impl eframe::App for ThresholdApp {
                         egui::WindowLevel::Normal
                     };
                     ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+                    // Turning off: minimize so the overlay gets out of the way.
+                    // Turning on: restore so the overlay comes back on top.
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(!self.always_on_top));
                 }
             }
         }
