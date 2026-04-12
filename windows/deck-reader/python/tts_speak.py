@@ -56,6 +56,11 @@ def parse_args() -> tuple[str, str, float]:
 def get_model_dir() -> str:
     """Return the path where Piper models are stored."""
     import os
+    # PIPER_MODELS_DIR is set by the Rust binary on Windows to point at
+    # %LOCALAPPDATA%\deck-reader\models (install.ps1 downloads models there).
+    explicit = os.environ.get("PIPER_MODELS_DIR")
+    if explicit:
+        return explicit
     return os.path.join(
         os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
         "deck-reader", "models",

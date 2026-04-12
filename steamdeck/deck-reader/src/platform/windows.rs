@@ -8,7 +8,7 @@
 
 use std::{
     path::{Path, PathBuf},
-    process::{Child, Command},
+    process::{Child, Command, Stdio},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -136,7 +136,7 @@ impl eframe::App for RegionSelector {
 
         // Paint overlay.
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(egui::Color32::from_black_alpha(150)))
+            .frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(20, 20, 20)))
             .show(ctx, |ui| {
                 let painter = ui.painter();
 
@@ -190,8 +190,10 @@ pub fn select_region() -> Result<Region> {
             .with_position([virt_x as f32, virt_y as f32])
             .with_inner_size([virt_w, virt_h])
             .with_decorations(false)
-            .with_always_on_top()
-            .with_transparent(true),
+            .with_always_on_top(),
+            // Note: with_transparent(true) causes a GPU hang / black screen on
+            // Windows (DWM transparent swapchain init fails silently).
+            // The overlay uses an opaque dark background instead.
         ..Default::default()
     };
 
@@ -297,6 +299,9 @@ pub fn spawn_tts_fallback(
     let data = super::data_dir();
     let python = data.join("venv").join("Scripts").join("python.exe");
     let script = data.join("python").join("tts_speak.py");
+    // Pass the models directory explicitly so tts_speak.py finds the Piper
+    // models even when XDG_DATA_HOME is not set (it never is on Windows).
+    let models_dir = data.join("models");
 
     // CREATE_NO_WINDOW: suppress the console window that would otherwise flash.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -306,6 +311,8 @@ pub fn spawn_tts_fallback(
         .arg(text)
         .arg(voice)
         .arg(speed.to_string())
+        .env("PIPER_MODELS_DIR", &models_dir)
+        .stderr(Stdio::piped()) // captured so errors reach poll_tts_done
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .with_context(|| {

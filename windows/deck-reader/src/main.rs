@@ -856,6 +856,16 @@ fn poll_tts_done(state: &mut TtsState) -> bool {
     // Fallback path: poll child process.
     if let Some(ref mut child) = state.fallback_child {
         if let Ok(Some(_)) = child.try_wait() {
+            // On Windows, stderr was piped — drain it so errors are visible.
+            #[cfg(windows)]
+            if let Some(mut stderr) = child.stderr.take() {
+                use std::io::Read;
+                let mut msg = String::new();
+                let _ = stderr.read_to_string(&mut msg);
+                if !msg.trim().is_empty() {
+                    eprintln!("[deck-reader] TTS process error:\n{}", msg.trim());
+                }
+            }
             state.fallback_child = None;
             state.speaking = false;
             return true;
