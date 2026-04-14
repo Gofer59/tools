@@ -72,7 +72,7 @@ Controls are in a narrow vertical panel on the left side. The thresholded image 
 | **Thr** (slider 0--255) | Brightness threshold. Pixels brighter than this value become white; darker ones become black. Default: 128 |
 | **Sel** button | Pick a new window and area. Same as pressing F10 |
 | **Inv** checkbox | Invert black and white |
-| **Top** checkbox | Keep the window above all other windows |
+| **Top** checkbox | Keep the window above all other windows (toggle via hotkey also minimizes/restores the overlay) |
 | **Move** buttons (`< > /\ \/`) | Nudge the overlay window by 20 pixels per click |
 | **Quit** button | Close the application |
 
@@ -81,7 +81,7 @@ Controls are in a narrow vertical panel on the left side. The thresholded image 
 | Key | Action |
 |-----|--------|
 | **F10** | Re-select window and area |
-| **F9** | Toggle always-on-top |
+| **F9** | Toggle always-on-top + minimize/restore overlay |
 
 Hotkeys work globally -- they are detected even when another window is focused (e.g. a game), including games with anti-cheat software such as Genshin Impact. Hotkeys use Win32 `RegisterHotKey` (not a low-level hook), so they cannot be blocked by anti-cheat. Configurable via the config file.
 

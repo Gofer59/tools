@@ -72,7 +72,7 @@ Les controles sont dans un panneau vertical etroit a gauche. L'image seuillee re
 | **Thr** (curseur 0--255) | Seuil de luminosite. Les pixels plus clairs que cette valeur deviennent blancs ; les plus sombres deviennent noirs. Par defaut : 128 |
 | Bouton **Sel** | Choisir une nouvelle fenetre et zone. Equivalent a appuyer sur F10 |
 | Case **Inv** | Inverser noir et blanc |
-| Case **Top** | Garder la fenetre au-dessus de toutes les autres |
+| Case **Top** | Garder la fenetre au-dessus de toutes les autres (le raccourci clavier minimise/restaure egalement l'overlay) |
 | Boutons **Move** (`< > /\ \/`) | Deplacer la fenetre overlay de 20 pixels par clic |
 | Bouton **Quit** | Fermer l'application |
 
@@ -81,7 +81,7 @@ Les controles sont dans un panneau vertical etroit a gauche. L'image seuillee re
 | Touche | Action |
 |--------|--------|
 | **F10** | Re-selectionner fenetre et zone |
-| **F9** | Activer/desactiver le mode toujours au premier plan |
+| **F9** | Activer/desactiver le mode toujours au premier plan + minimiser/restaurer l'overlay |
 
 Les raccourcis fonctionnent globalement -- ils sont detectes meme quand une autre fenetre est active (par exemple un jeu), y compris les jeux avec logiciel anti-triche comme Genshin Impact. Les raccourcis utilisent Win32 `RegisterHotKey` (pas un hook bas niveau), ils ne peuvent donc pas etre bloques par l'anti-triche. Configurables via le fichier de configuration.
 
