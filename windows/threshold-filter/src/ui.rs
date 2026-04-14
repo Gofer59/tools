@@ -73,6 +73,8 @@ pub struct ThresholdApp {
     window_id: Option<String>,
     /// Pending move delta for platforms using ViewportCommand
     pending_move: Option<(i32, i32)>,
+    /// Delayed WindowLevel(AlwaysOnTop) after restore from minimized
+    pending_on_top: Option<Instant>,
 
     // Linux-only: background thread selection
     #[cfg(target_os = "linux")]
@@ -123,6 +125,7 @@ impl ThresholdApp {
             reposition_to: None,
             window_id,
             pending_move: None,
+            pending_on_top: None,
             #[cfg(target_os = "linux")]
             selection_rx: None,
             #[cfg(target_os = "windows")]
@@ -328,16 +331,30 @@ impl eframe::App for ThresholdApp {
                 }
                 HotkeyAction::ToggleOnTop => {
                     self.always_on_top = !self.always_on_top;
-                    let level = if self.always_on_top {
-                        egui::WindowLevel::AlwaysOnTop
+                    if self.always_on_top {
+                        // Restore first; Windows finalises the restore asynchronously,
+                        // so delay AlwaysOnTop by 150 ms or the window won't come to front.
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                        self.pending_on_top = Some(
+                            Instant::now() + std::time::Duration::from_millis(150),
+                        );
                     } else {
-                        egui::WindowLevel::Normal
-                    };
-                    ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
-                    // Turning off: minimize so the overlay gets out of the way.
-                    // Turning on: restore so the overlay comes back on top.
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(!self.always_on_top));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                            egui::WindowLevel::Normal,
+                        ));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
                 }
+            }
+        }
+
+        // Delayed AlwaysOnTop after restore from minimized
+        if let Some(deadline) = self.pending_on_top {
+            if Instant::now() >= deadline {
+                ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(
+                    egui::WindowLevel::AlwaysOnTop,
+                ));
+                self.pending_on_top = None;
             }
         }
 
