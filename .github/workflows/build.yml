@@ -1,0 +1,67 @@
+name: Build Windows executables
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # allows manual trigger from GitHub UI
+
+jobs:
+  build-threshold-filter:
+    name: threshold-filter (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            windows/threshold-filter/target
+          key: threshold-filter-${{ hashFiles('windows/threshold-filter/Cargo.lock') }}
+          restore-keys: threshold-filter-
+
+      - name: Build
+        working-directory: windows/threshold-filter
+        run: cargo build --release
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: threshold-filter-windows-${{ github.sha }}
+          path: windows/threshold-filter/target/release/threshold-filter.exe
+          retention-days: 30
+
+  build-deck-reader:
+    name: deck-reader (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            windows/deck-reader/target
+          key: deck-reader-${{ hashFiles('windows/deck-reader/Cargo.lock') }}
+          restore-keys: deck-reader-
+
+      - name: Build
+        working-directory: windows/deck-reader
+        run: cargo build --release
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: deck-reader-windows-${{ github.sha }}
+          path: windows/deck-reader/target/release/deck-reader.exe
+          retention-days: 30
