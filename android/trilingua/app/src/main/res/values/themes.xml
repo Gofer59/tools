@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Minimal theme declaration; Compose owns the actual theming.
+         Dark theme parent prevents the white flash before Compose renders. -->
+    <style name="Theme.Trilingua" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/trilingua_background</item>
+        <item name="android:statusBarColor">@color/trilingua_background</item>
+        <item name="android:navigationBarColor">@color/trilingua_background</item>
+    </style>
+</resources>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Trilingua</string>
+
+    <!-- MicButton -->
+    <string name="mic_hold_to_talk">Hold to talk</string>
+    <string name="mic_disabled">Microphone disabled</string>
+
+    <!-- TranscriptPane -->
+    <string name="source_hint">Source transcript will appear here</string>
+    <string name="target_hint">Translation will appear here</string>
+
+    <!-- BootProgressOverlay -->
+    <string name="boot_extracting">Extracting models…</string>
+    <string name="boot_extracting_pct">Extracting models… %1$d%%</string>
+    <string name="boot_failed">Model extraction failed.\nPlease reinstall the app.</string>
+    <string name="boot_initializing">Initializing…</string>
+    <string name="boot_retry">Retry</string>
+
+    <!-- ErrorBanner -->
+    <string name="error_dismiss">Dismiss</string>
+    <string name="error_mic_denied">Microphone permission required</string>
+    <string name="error_model_missing">Model missing: %1$s</string>
+    <string name="error_voice_missing">Voice missing: %1$s</string>
+    <string name="error_native_crash">Engine crashed: %1$s</string>
+    <string name="error_unsupported_pair">Unsupported: %1$s</string>
+    <string name="error_too_short">Hold the mic longer (≥ 300 ms)</string>
+    <string name="error_too_long">Recording hit the 60 s cap</string>
+
+    <!-- TrilinguaError messageRes keys -->
+    <string name="err_mic_denied">Microphone permission required</string>
+    <string name="err_model_missing">Model missing: %1$s</string>
+    <string name="err_voice_missing">Voice missing: %1$s</string>
+    <string name="err_native_crash">Engine crashed: %1$s</string>
+    <string name="err_unsupported_pair">Unsupported: %1$s</string>
+    <string name="err_too_short">Hold the mic longer (≥ 300 ms)</string>
+    <string name="err_too_long">Recording hit the 60 s cap</string>
+
+    <!-- LanguageRow -->
+    <string name="swap_languages">Swap languages</string>
+
+    <!-- MainScreen -->
+    <string name="cancel">Cancel</string>
+    <string name="settings">Settings</string>
+    <string name="mic_ready_hint">Microphone ready — tap and hold to record</string>
+
+    <!-- SettingsScreen -->
+    <string name="settings_title">TTS Settings</string>
+    <string name="settings_speed_label">Speed: %1$.1f×</string>
+    <string name="settings_speed_description">Adjust the TTS playback speed</string>
+    <string name="settings_noise_scale_label">Voice variability: %1$.2f</string>
+    <string name="settings_noise_scale_description">Controls how expressive the voice sounds (Piper noise scale)</string>
+    <string name="settings_pitch_label">Pitch: %1$.1f×</string>
+    <string name="settings_pitch_description">Adjust voice pitch (AudioTrack, independent of speed)</string>
+    <string name="settings_voice_label">Voice</string>
+    <string name="settings_voice_more">More voices (download) — Not yet available</string>
+    <string name="settings_play_sample">Play sample</string>
+    <string name="settings_close">Close settings</string>
+    <string name="settings_save">Save</string>
+</resources>

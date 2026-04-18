@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude extracted models from backup — they are regenerated from assets. -->
+    <exclude domain="file" path="whisper/" />
+    <exclude domain="file" path="mt/" />
+    <exclude domain="file" path="tts/" />
+</full-backup-content>

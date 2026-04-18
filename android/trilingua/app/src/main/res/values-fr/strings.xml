@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Trilingua</string>
+
+    <!-- MicButton -->
+    <string name="mic_hold_to_talk">Maintenir pour parler</string>
+    <string name="mic_disabled">Microphone désactivé</string>
+
+    <!-- TranscriptPane -->
+    <string name="source_hint">La transcription source apparaîtra ici</string>
+    <string name="target_hint">La traduction apparaîtra ici</string>
+
+    <!-- BootProgressOverlay -->
+    <string name="boot_extracting">Extraction des modèles…</string>
+    <string name="boot_extracting_pct">Extraction des modèles… %1$d%%</string>
+    <string name="boot_failed">Échec de l\'extraction des modèles.\nVeuillez réinstaller l\'application.</string>
+    <string name="boot_initializing">Initialisation…</string>
+    <string name="boot_retry">Réessayer</string>
+
+    <!-- ErrorBanner -->
+    <string name="error_dismiss">Fermer</string>
+    <string name="error_mic_denied">Autorisation microphone requise</string>
+    <string name="error_model_missing">Modèle manquant : %1$s</string>
+    <string name="error_voice_missing">Voix manquante : %1$s</string>
+    <string name="error_native_crash">Moteur planté : %1$s</string>
+    <string name="error_unsupported_pair">Non supporté : %1$s</string>
+    <string name="error_too_short">Maintenir le micro plus longtemps (≥ 300 ms)</string>
+    <string name="error_too_long">Enregistrement limité à 60 s</string>
+
+    <!-- TrilinguaError messageRes keys -->
+    <string name="err_mic_denied">Autorisation microphone requise</string>
+    <string name="err_model_missing">Modèle manquant : %1$s</string>
+    <string name="err_voice_missing">Voix manquante : %1$s</string>
+    <string name="err_native_crash">Moteur planté : %1$s</string>
+    <string name="err_unsupported_pair">Non supporté : %1$s</string>
+    <string name="err_too_short">Maintenir le micro plus longtemps (≥ 300 ms)</string>
+    <string name="err_too_long">Enregistrement limité à 60 s</string>
+
+    <!-- LanguageRow -->
+    <string name="swap_languages">Inverser les langues</string>
+
+    <!-- MainScreen -->
+    <string name="cancel">Annuler</string>
+    <string name="settings">Paramètres</string>
+    <string name="mic_ready_hint">Microphone prêt — appuyer et maintenir pour enregistrer</string>
+
+    <!-- SettingsScreen -->
+    <string name="settings_title">Paramètres TTS</string>
+    <string name="settings_speed_label">Vitesse : %1$.1f×</string>
+    <string name="settings_speed_description">Ajuster la vitesse de synthèse vocale</string>
+    <string name="settings_noise_scale_label">Variabilité de la voix : %1$.2f</string>
+    <string name="settings_noise_scale_description">Contrôle l\'expressivité de la voix (bruit Piper)</string>
+    <string name="settings_pitch_label">Hauteur : %1$.1f×</string>
+    <string name="settings_pitch_description">Régler la hauteur de la voix (indépendant de la vitesse)</string>
+    <string name="settings_voice_label">Voix</string>
+    <string name="settings_voice_more">Plus de voix (téléchargement) — Pas encore disponible</string>
+    <string name="settings_play_sample">Écouter un exemple</string>
+    <string name="settings_close">Fermer les paramètres</string>
+    <string name="settings_save">Sauvegarder</string>
+</resources>

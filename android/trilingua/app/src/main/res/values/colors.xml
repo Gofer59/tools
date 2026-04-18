@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="trilingua_primary">#E07856</color>
+    <color name="trilingua_on_primary">#3A1306</color>
+    <color name="trilingua_secondary">#7FB3FF</color>
+    <color name="trilingua_tertiary">#8FD694</color>
+    <color name="trilingua_background">#121316</color>
+    <color name="trilingua_surface">#1B1D22</color>
+    <color name="trilingua_error">#E3685E</color>
+</resources>

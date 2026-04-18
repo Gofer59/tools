@@ -1,0 +1,12 @@
+[submodule "third_party/whisper.cpp"]
+	path = third_party/whisper.cpp
+	url = https://github.com/ggerganov/whisper.cpp.git
+	branch = master
+[submodule "third_party/CTranslate2"]
+	path = third_party/CTranslate2
+	url = https://github.com/OpenNMT/CTranslate2.git
+	branch = master
+[submodule "third_party/sentencepiece"]
+	path = third_party/sentencepiece
+	url = https://github.com/google/sentencepiece.git
+	branch = master
