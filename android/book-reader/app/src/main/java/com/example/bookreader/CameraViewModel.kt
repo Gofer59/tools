@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.bookreader.data.speechRateFlow
 
 /**
  * Central state machine for the BookReader camera-to-TTS pipeline.
@@ -32,6 +33,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     val ttsManager = TtsManager(application.applicationContext)
     val ttsState: StateFlow<TtsState> = ttsManager.ttsState
+
+    init {
+        viewModelScope.launch {
+            getApplication<Application>().speechRateFlow().collect { rate ->
+                ttsManager.setSpeechRate(rate)
+            }
+        }
+    }
 
     /**
      * Freezes the camera on the given [bitmap] and launches OCR processing.

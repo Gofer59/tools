@@ -18,4 +18,12 @@
     <string name="lang_fr">FR</string>
     <string name="lang_en">EN</string>
     <string name="voice_missing">Voix %1$s non disponible</string>
+    <!-- Settings screen -->
+    <string name="settings_title">Réglages</string>
+    <string name="settings_back">Retour</string>
+    <string name="settings_speech_rate_title">Vitesse de lecture</string>
+    <string name="settings_speech_rate_value">%1$.1f×</string>
+    <string name="settings_voice_models_title">Modèles vocaux</string>
+    <string name="settings_voice_models_subtitle">Bientôt disponible</string>
+    <string name="settings_open">Ouvrir les réglages</string>
 </resources>

@@ -86,6 +86,15 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 7. Tapez **Lire la selection** -- le texte est lu a voix haute
 8. Tapez **Effacer** pour revenir a la camera en direct
 
+### Reglages
+
+Tapez l'icone **engrenage** en haut a droite (a gauche du bouton FR/EN) pour ouvrir l'ecran des reglages.
+
+- **Vitesse de lecture** -- curseur horizontal de 0.5x a 2.0x (pas de 0.1, defaut 1.0x). Le changement s'applique a la prochaine phrase lue ; la lecture en cours n'est pas interrompue.
+- **Modeles vocaux** -- emplacement reserve pour de futurs telechargements de voix (actuellement desactive avec "Bientot disponible").
+
+La vitesse est persistee via Jetpack DataStore (Preferences) sous la cle `speech_rate`. Une nouvelle installation reinitialise a 1.0x.
+
 ### Changement de langue
 
 Le bouton **FR/EN** en haut a droite bascule entre le francais et l'anglais pour la reconnaissance OCR et la voix de synthese vocale. La langue par defaut est le francais.
@@ -135,19 +144,23 @@ Dans les parametres de synthese vocale, il y a un bouton **"Ecouter un exemple"*
 
 ```
 app/src/main/java/com/example/bookreader/
-  MainActivity.kt           Activity : configuration camera, gestion des boutons, observation de l'etat
-  CameraViewModel.kt        ViewModel : machine a etats (LivePreview -> Processing -> Frozen)
+  MainActivity.kt           Activity : configuration camera, boutons, observation de l'etat
+  SettingsActivity.kt       Activity : curseur vitesse + emplacement modeles vocaux
+  CameraViewModel.kt        ViewModel : machine a etats + sync vitesse de lecture
   OcrProcessor.kt           OCR sur l'appareil via ML Kit Text Recognition (modele latin integre)
-  TtsManager.kt             Wrapper TTS avec StateFlow, changement de locale (FR/EN)
+  TtsManager.kt             Wrapper TTS avec StateFlow, locale et vitesse de lecture
   HighlightOverlayView.kt   Vue personnalisee : overlay des bounding boxes, tap pour selectionner
+  data/
+    SettingsDataStore.kt    Jetpack DataStore (Preferences) : cle speech_rate (Float)
   model/
     CameraState.kt          Interface scellee : LivePreview | Processing | Frozen
     TtsState.kt             Interface scellee : Initializing | Ready | Speaking | MissingVoice | Error
     TextRegion.kt           Data class : bloc de texte detecte avec bounding box et etat de selection
 
 app/src/main/res/
-  layout/activity_main.xml  ConstraintLayout : apercu camera, image figee, overlay, boutons
-  values/strings.xml        Chaines de l'interface (en francais par defaut)
+  layout/activity_main.xml      ConstraintLayout : camera, image figee, overlay, boutons, engrenage
+  layout/activity_settings.xml  Ecran reglages : toolbar, curseur, carte modeles vocaux
+  values/strings.xml            Chaines de l'interface (en francais par defaut)
 ```
 
 ### Pipeline
@@ -169,6 +182,7 @@ Camera (CameraX) --> Capture image --> Rotation a l'endroit (Matrix.postRotate)
 | ML Kit Text Recognition 16.0 | OCR sur l'appareil (modele latin integre, pas de reseau necessaire) |
 | Android TextToSpeech | Synthese vocale native |
 | Material 3 | Composants d'interface et theme |
+| Jetpack DataStore Preferences 1.1 | Persistance de la vitesse de lecture |
 
 ## Limitations connues
 

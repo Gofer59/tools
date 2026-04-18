@@ -125,6 +125,10 @@ class MainActivity : AppCompatActivity() {
                 binding.btnLanguage.text = getString(R.string.lang_fr)
             }
         }
+
+        binding.btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
     }
 
     private fun setupOverlay() {

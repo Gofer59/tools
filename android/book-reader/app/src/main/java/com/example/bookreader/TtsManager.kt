@@ -28,6 +28,13 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
 
     private var engineReady = false
 
+    @Volatile
+    private var currentRate: Float = 1.0f
+
+    fun setSpeechRate(rate: Float) {
+        currentRate = rate
+    }
+
     override fun onInit(status: Int) {
         // Register listener BEFORE setting Ready state to avoid race where speak()
         // is called before callbacks are wired up
@@ -87,6 +94,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
         if (currentState != TtsState.Ready && currentState != TtsState.Speaking) return
 
         tts.setLanguage(_currentLocale.value)
+        tts.setSpeechRate(currentRate)
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "bookreader_utterance")
     }
 

@@ -86,6 +86,15 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 7. Tap **Lire la selection** (Read selected) -- the text is read aloud
 8. Tap **Effacer** (Clear) to return to the live camera
 
+### Settings
+
+Tap the **gear** icon in the top-right (left of the FR/EN button) to open the settings screen.
+
+- **Speech rate** -- horizontal slider from 0.5x to 2.0x (step 0.1, default 1.0x). Changes apply to the next utterance; in-flight speech is not interrupted.
+- **Voice models** -- placeholder for future downloadable voice packs (currently disabled with "Bientot disponible").
+
+The speech rate is persisted with Jetpack DataStore (Preferences) under the key `speech_rate` and survives uninstall/reinstall of the cache only -- a fresh install resets to 1.0x.
+
 ### Language toggle
 
 The **FR/EN** button in the top-right corner switches between French and English for both OCR recognition and TTS voice. The default language is French.
@@ -136,18 +145,22 @@ In the text-to-speech settings, there is a **"Listen to an example"** (or "Play"
 ```
 app/src/main/java/com/example/bookreader/
   MainActivity.kt           Activity: camera setup, button handlers, state observation
-  CameraViewModel.kt        ViewModel: state machine (LivePreview -> Processing -> Frozen)
+  SettingsActivity.kt       Activity: speech-rate slider + voice-models stub
+  CameraViewModel.kt        ViewModel: state machine + speech-rate sync
   OcrProcessor.kt           On-device OCR via ML Kit Text Recognition (bundled Latin model)
-  TtsManager.kt             TTS wrapper with StateFlow, locale switching (FR/EN)
+  TtsManager.kt             TTS wrapper with StateFlow, locale + speech-rate
   HighlightOverlayView.kt   Custom View: bounding-box overlay, tap-to-select interaction
+  data/
+    SettingsDataStore.kt    Jetpack DataStore (Preferences): speech_rate Float key
   model/
     CameraState.kt          Sealed interface: LivePreview | Processing | Frozen
     TtsState.kt             Sealed interface: Initializing | Ready | Speaking | MissingVoice | Error
     TextRegion.kt           Data class: detected text block with bounding box and selection state
 
 app/src/main/res/
-  layout/activity_main.xml  ConstraintLayout: camera preview, frozen image, overlay, buttons
-  values/strings.xml        UI strings (French by default)
+  layout/activity_main.xml      ConstraintLayout: camera preview, frozen image, overlay, buttons, gear icon
+  layout/activity_settings.xml  Settings screen: toolbar, speech-rate slider, voice-models card
+  values/strings.xml            UI strings (French by default)
 ```
 
 ### Pipeline
@@ -169,6 +182,7 @@ Camera (CameraX) --> Capture frame --> Rotate to upright (Matrix.postRotate)
 | ML Kit Text Recognition 16.0 | On-device OCR (bundled Latin model, no network required) |
 | Android TextToSpeech | Built-in speech synthesis |
 | Material 3 | UI components and theming |
+| Jetpack DataStore Preferences 1.1 | Persisted speech-rate setting |
 
 ## Known Limitations
 
