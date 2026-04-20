@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Deck Reader — Post-update fix
+GenericName=SteamOS post-update recovery
+Comment=Reinstall deck-reader's system dependencies after a SteamOS major update
+Exec=konsole --hold -e bash -c 'cd "$(dirname "%k")" && ./post-update-fix.sh'
+Icon=system-software-update
+Terminal=false
+Categories=Utility;System;
+Keywords=deck-reader;pacman;keyring;steamos;update;recovery;

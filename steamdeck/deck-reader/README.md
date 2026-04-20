@@ -207,8 +207,18 @@ When SteamOS applies a major update, two things break the installer:
    error: failed to commit transaction (unexpected error)
    ```
 
-The current `install.sh` handles both automatically in steps 1–4. If you'd
-rather run the minimum by hand, it's:
+The current `install.sh` handles both automatically in steps 1–4.
+
+#### Recommended: click the post-update fix entry
+
+`install.sh` installs a dedicated launcher "**Deck Reader — Post-update fix**"
+into your KDE application menu. After a SteamOS update, just search for it in
+the app menu (or open Dolphin in `~/deck-reader/` and double-click
+`post-update-fix.desktop`) — it opens a Konsole, prompts for your sudo password
+once, and runs the full recovery (unlock → keyring init → pacman install →
+re-lock). No need to re-run `install.sh` or re-download anything.
+
+#### Manual recovery (equivalent)
 
 ```bash
 sudo steamos-readonly disable

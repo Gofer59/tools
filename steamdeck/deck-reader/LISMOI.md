@@ -207,8 +207,19 @@ Lorsque SteamOS applique une mise a jour majeure, deux choses cassent l'installa
    error: failed to commit transaction (unexpected error)
    ```
 
-L'actuel `install.sh` gere les deux automatiquement dans les etapes 1 a 4. Si
-vous preferez faire le minimum a la main, c'est :
+L'actuel `install.sh` gere les deux automatiquement dans les etapes 1 a 4.
+
+#### Recommande : cliquer sur l'entree de reparation
+
+`install.sh` installe un lanceur dedie « **Deck Reader — Post-update fix** »
+dans votre menu d'applications KDE. Apres une mise a jour SteamOS, cherchez-le
+dans le menu d'applications (ou ouvrez Dolphin dans `~/deck-reader/` et
+double-cliquez `post-update-fix.desktop`) — il ouvre une Konsole, demande votre
+mot de passe sudo une fois, et execute toute la recuperation (deverrouillage →
+init du trousseau → installation pacman → reverrouillage). Pas besoin de
+relancer `install.sh` ni de retelecharger quoi que ce soit.
+
+#### Recuperation manuelle (equivalente)
 
 ```bash
 sudo steamos-readonly disable

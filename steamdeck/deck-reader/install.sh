@@ -217,6 +217,11 @@ install -m 644 "${SCRIPT_DIR}/python/tts_daemon.py"  "${INSTALL_DIR}/tts_daemon.
 install -m 644 "${SCRIPT_DIR}/python/ocr_extract.py" "${INSTALL_DIR}/ocr_extract.py"
 install -m 644 "${SCRIPT_DIR}/python/gui_window.py"  "${INSTALL_DIR}/gui_window.py"
 
+# Post-update recovery script (survives SteamOS updates alongside the binary
+# so the user can re-run it from the KDE app menu after any major update).
+install -m 755 "${SCRIPT_DIR}/post-update-fix.sh" \
+    "${INSTALL_DIR}/deck-reader-post-update-fix.sh"
+
 # Auto-generated TTS wrapper (activates venv, then runs tts_speak.py)
 cat > "${INSTALL_DIR}/tts_speak_wrapper.sh" << WRAPPER
 #!/usr/bin/env bash
@@ -255,8 +260,25 @@ Categories=Utility;Accessibility;
 Keywords=ocr;tts;speech;screen;reader;
 DESKTOP
 
+# Post-update recovery launcher — appears in the KDE application menu so the
+# user can click one entry to restore deck-reader after a SteamOS major update.
+cat > "${APPS_DIR}/deck-reader-post-update-fix.desktop" << DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Deck Reader — Post-update fix
+GenericName=SteamOS post-update recovery
+Comment=Reinstall deck-reader's system dependencies after a SteamOS major update
+Exec=konsole --hold -e ${INSTALL_DIR}/deck-reader-post-update-fix.sh
+Icon=system-software-update
+Terminal=false
+Categories=Utility;System;
+Keywords=deck-reader;pacman;keyring;steamos;update;recovery;
+DESKTOP
+
 update-desktop-database "${APPS_DIR}" 2>/dev/null || true
-ok "App menu entry written to ${APPS_DIR}/deck-reader.desktop"
+ok "App menu entries written:"
+ok "  ${APPS_DIR}/deck-reader.desktop"
+ok "  ${APPS_DIR}/deck-reader-post-update-fix.desktop"
 
 # PATH check
 if ! echo "${PATH}" | tr ':' '\n' | grep -qF "${INSTALL_DIR}"; then
