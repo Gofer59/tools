@@ -192,6 +192,39 @@ deck-reader/
 - L'appartenance au groupe `input` survit aux mises a jour
 - Le Mode Jeu (Gamescope) peut ne pas transmettre les raccourcis a rdev -- utilisez le Mode Bureau pour de meilleurs resultats
 
+### Survivre a une mise a jour SteamOS
+
+Lorsque SteamOS applique une mise a jour majeure, deux choses cassent l'installateur :
+
+1. Les paquets systeme installes via pacman sont effaces.
+2. Le trousseau de cles pacman dans `/etc/pacman.d/gnupg` est reinitialise / non
+   inscriptible, donc tout appel `pacman -S` echoue avec des erreurs du type :
+
+   ```
+   warning: Public keyring not found; have you run 'pacman-key --init'?
+   error: keyring is not writable
+   error: required key missing from keyring
+   error: failed to commit transaction (unexpected error)
+   ```
+
+L'actuel `install.sh` gere les deux automatiquement dans les etapes 1 a 4. Si
+vous preferez faire le minimum a la main, c'est :
+
+```bash
+sudo steamos-readonly disable
+sudo pacman-key --init
+sudo pacman-key --populate archlinux
+sudo pacman-key --populate holo           # peut ne pas exister sur toutes les images SteamOS
+sudo pacman -S --needed \
+    xclip xdotool maim slop wl-clipboard grim slurp \
+    tesseract tesseract-data-eng tk
+sudo steamos-readonly enable
+```
+
+Votre venv, vos modeles, votre config et votre binaire dans `~/.local/` et
+`~/.config/` sont intacts apres les mises a jour, donc vous n'avez jamais
+besoin de refaire les etapes 6 a 10.
+
 ## Limitations connues
 
 - Necessite le Mode Bureau (KDE Plasma) -- Gamescope en Mode Jeu peut ne pas transmettre les evenements clavier a rdev

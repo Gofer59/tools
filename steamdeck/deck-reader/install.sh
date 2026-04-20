@@ -9,14 +9,15 @@
 #
 # What this does (in order):
 #   1. Unlocks the SteamOS read-only filesystem
-#   2. Installs runtime system packages via pacman
-#   3. Re-locks the filesystem
-#   4. Checks input group membership
-#   5. Checks for pre-built binary
-#   6. Creates Python venv + installs dependencies
-#   7. Downloads Piper voice model
-#   8. Installs files to ~/.local/bin/ and generates wrapper scripts
-#   9. Installs KDE application menu entry + checks PATH
+#   2. Initializes/populates the pacman keyring (required after SteamOS updates)
+#   3. Installs runtime system packages via pacman
+#   4. Re-locks the filesystem
+#   5. Checks input group membership
+#   6. Checks for pre-built binary
+#   7. Creates Python venv + installs dependencies
+#   8. Downloads Piper voice model
+#   9. Installs files to ~/.local/bin/ and generates wrapper scripts
+#  10. Installs KDE application menu entry + checks PATH
 
 set -euo pipefail
 
@@ -54,9 +55,9 @@ ask_yes() {
 # Step 1 — Unlock SteamOS read-only filesystem
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 1/9: Unlocking SteamOS read-only filesystem…"
+info "Step 1/10: Unlocking SteamOS read-only filesystem…"
 warn "System packages installed via pacman may be wiped by a SteamOS major update."
-warn "If that happens, re-run steps 1–3 of this installer (or the full script)."
+warn "If that happens, re-run steps 1–4 of this installer (or the full script)."
 warn "See the 'SteamOS update survival' section in README.md."
 echo
 
@@ -65,10 +66,32 @@ ok "Filesystem unlocked."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 2 — Install runtime system packages
+# Step 2 — Initialize / populate pacman keyring
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# After a SteamOS major update, /etc/pacman.d/gnupg is often wiped or made
+# read-only, so pacman -S fails with:
+#     warning: Public keyring not found; have you run 'pacman-key --init'?
+#     error: keyring is not writable
+#     error: required key missing from keyring
+# Re-initialising and populating the keyring here makes the installer idempotent
+# across SteamOS updates.
+
+info "Step 2/10: Initialising pacman keyring…"
+sudo pacman-key --init
+# "holo" is the SteamOS-specific keyring; it may be absent on some images, so
+# don't abort if only archlinux populates successfully.
+sudo pacman-key --populate archlinux
+sudo pacman-key --populate holo 2>/dev/null || \
+    warn "holo keyring not populated (may be absent on this SteamOS image) — continuing."
+ok "Keyring ready."
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 3 — Install runtime system packages
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 2/9: Installing runtime system packages via pacman…"
+info "Step 3/10: Installing runtime system packages via pacman…"
 sudo pacman -S --noconfirm --needed \
     xclip \
     xdotool \
@@ -84,19 +107,19 @@ ok "System packages installed."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 3 — Re-lock filesystem
+# Step 4 — Re-lock filesystem
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 3/9: Re-locking SteamOS filesystem…"
+info "Step 4/10: Re-locking SteamOS filesystem…"
 sudo steamos-readonly enable
 ok "Filesystem re-locked."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4 — input group check
+# Step 5 — input group check
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 4/9: Checking input group membership…"
+info "Step 5/10: Checking input group membership…"
 if groups "${USER}" | grep -qw input; then
     ok "User '${USER}' is already in the 'input' group."
 else
@@ -113,10 +136,10 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 5 — Check for pre-built binary
+# Step 6 — Check for pre-built binary
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 5/9: Checking for pre-built binary…"
+info "Step 6/10: Checking for pre-built binary…"
 BUILT_BINARY="${SCRIPT_DIR}/target/release/deck-reader"
 
 if [[ ! -f "${BUILT_BINARY}" ]]; then
@@ -135,10 +158,10 @@ ok "Found pre-built binary."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 6 — Python venv + dependencies
+# Step 7 — Python venv + dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 6/9: Setting up Python venv at ${VENV_DIR}…"
+info "Step 7/10: Setting up Python venv at ${VENV_DIR}…"
 mkdir -p "${DATA_DIR}"
 
 if [[ ! -d "${VENV_DIR}" ]]; then
@@ -155,10 +178,10 @@ ok "Python dependencies installed."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 7 — Download Piper voice model
+# Step 8 — Download Piper voice model
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 7/9: Checking Piper voice model (${VOICE_NAME})…"
+info "Step 8/10: Checking Piper voice model (${VOICE_NAME})…"
 mkdir -p "${MODELS_DIR}"
 
 ONNX_FILE="${MODELS_DIR}/${VOICE_NAME}.onnx"
@@ -179,10 +202,10 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 8 — Install files and generate wrapper scripts
+# Step 9 — Install files and generate wrapper scripts
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 8/9: Installing files to ${INSTALL_DIR}…"
+info "Step 9/10: Installing files to ${INSTALL_DIR}…"
 mkdir -p "${INSTALL_DIR}"
 
 # Binary
@@ -214,10 +237,10 @@ ok "Files installed."
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 9 — KDE application menu entry + PATH check
+# Step 10 — KDE application menu entry + PATH check
 # ─────────────────────────────────────────────────────────────────────────────
 
-info "Step 9/9: Installing KDE application menu entry…"
+info "Step 10/10: Installing KDE application menu entry…"
 mkdir -p "${APPS_DIR}"
 
 cat > "${APPS_DIR}/deck-reader.desktop" << DESKTOP

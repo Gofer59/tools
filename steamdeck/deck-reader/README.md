@@ -192,6 +192,38 @@ deck-reader/
 - The `input` group membership survives updates
 - Game Mode (Gamescope) may not forward hotkeys to rdev -- use Desktop Mode for best results
 
+### SteamOS update survival
+
+When SteamOS applies a major update, two things break the installer:
+
+1. System packages installed via pacman are wiped.
+2. The pacman keyring at `/etc/pacman.d/gnupg` is reset/non-writable, so any
+   `pacman -S` call fails with errors like:
+
+   ```
+   warning: Public keyring not found; have you run 'pacman-key --init'?
+   error: keyring is not writable
+   error: required key missing from keyring
+   error: failed to commit transaction (unexpected error)
+   ```
+
+The current `install.sh` handles both automatically in steps 1–4. If you'd
+rather run the minimum by hand, it's:
+
+```bash
+sudo steamos-readonly disable
+sudo pacman-key --init
+sudo pacman-key --populate archlinux
+sudo pacman-key --populate holo           # may not exist on all SteamOS images
+sudo pacman -S --needed \
+    xclip xdotool maim slop wl-clipboard grim slurp \
+    tesseract tesseract-data-eng tk
+sudo steamos-readonly enable
+```
+
+Your venv, models, config, and binary in `~/.local/` and `~/.config/` are
+untouched by updates, so you never have to repeat steps 6–10.
+
 ## Known Limitations
 
 - Requires Desktop Mode (KDE Plasma) -- Gamescope in Game Mode may not forward key events to rdev
