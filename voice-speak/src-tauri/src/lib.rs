@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod clipboard;
 pub mod config;
 pub mod piper;
