@@ -1,4 +1,5 @@
 mod config;
+mod whisper;
 
 pub fn run() {
     tauri::Builder::default()
