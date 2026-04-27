@@ -31,6 +31,8 @@ pub struct AppState {
     pub test_hotkey_armed: Arc<AtomicBool>,
     pub audio_tx: tokio::sync::mpsc::Sender<AudioCmd>,
     pub is_speaking: Arc<AtomicBool>,
+    /// Last PRIMARY content we acted on — used to detect fresh selections.
+    pub last_primary: Arc<Mutex<String>>,
 }
 
 pub fn run() {
@@ -117,6 +119,10 @@ pub fn run() {
 
                 let hk = hotkey::register(&handle, &cfg.hotkey).expect("hotkey register");
 
+                // Seed last_primary with whatever is currently in PRIMARY so the
+                // first hotkey press doesn't treat pre-existing stale text as fresh.
+                let initial_primary = clipboard::read_primary().unwrap_or_default();
+
                 let state = AppState {
                     config: Arc::new(RwLock::new(cfg)),
                     hotkey_ctrl: Arc::new(Mutex::new(hk)),
@@ -125,6 +131,7 @@ pub fn run() {
                     test_hotkey_armed: Arc::new(AtomicBool::new(false)),
                     audio_tx: audio_tx_for_state,
                     is_speaking: is_speaking_state,
+                    last_primary: Arc::new(Mutex::new(initial_primary)),
                 };
                 handle.manage(state);
 
@@ -198,15 +205,27 @@ fn wire_hotkey_pipeline(app: AppHandle) {
                 return;
             }
 
-            // First press — read text and speak.
-            let text = match clipboard::read_selection() {
-                Ok(t) if !t.is_empty() => t,
-                Ok(_) => {
-                    eprintln!("[voice-speak] nothing to read (selection and clipboard both empty)");
-                    return;
-                }
-                Err(e) => {
-                    eprintln!("[voice-speak] clipboard read: {e}");
+            // First press — pick whichever source was updated most recently.
+            // PRIMARY changes when the user makes a new selection; CLIPBOARD
+            // changes on Ctrl+C. We track the last PRIMARY we saw: if it
+            // changed, the selection is newer; if it's the same, the clipboard
+            // is newer (or the selection is stale).
+            let primary = clipboard::read_primary().unwrap_or_default();
+            let clipboard_text = clipboard::read_clipboard().unwrap_or_default();
+
+            let text = {
+                let mut last = state.last_primary.lock().await;
+                let primary_is_fresh = !primary.is_empty() && primary != *last;
+                if primary_is_fresh {
+                    *last = primary.clone();
+                    primary
+                } else if !clipboard_text.is_empty() {
+                    clipboard_text
+                } else if !primary.is_empty() {
+                    // Nothing in clipboard — read whatever primary has.
+                    primary
+                } else {
+                    eprintln!("[voice-speak] nothing to read");
                     return;
                 }
             };
