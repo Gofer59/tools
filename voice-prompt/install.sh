@@ -98,7 +98,7 @@ echo "[+] Binary installed to $BIN/$TOOL"
 # ---------------------------------------------------------------------------
 # 4. Install whisper daemon script
 # ---------------------------------------------------------------------------
-DAEMON_SRC="$SCRIPT_DIR/whisper_daemon.py"
+DAEMON_SRC="$SCRIPT_DIR/python/whisper_daemon.py"
 if [[ ! -f "$DAEMON_SRC" ]]; then
     echo "[!] WARNING: whisper_daemon.py not found at $DAEMON_SRC — skipping."
 else

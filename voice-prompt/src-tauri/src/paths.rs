@@ -17,12 +17,16 @@ pub fn daemon_script(app: &AppHandle) -> PathBuf {
             return p;
         }
     }
-    // Dev fallback: look in the worktree python/ directory
-    PathBuf::from(
-        std::env::current_exe()
-            .ok()
-            .and_then(|e| e.parent().map(|p| p.to_path_buf()))
-            .unwrap_or_default()
-            .join("../../../python/whisper_daemon.py"),
-    )
+    // User-visible install path: ~/.local/share/voice-prompt/whisper_daemon.py
+    if let Ok(home) = app.path().home_dir() {
+        let p = home.join(".local/share/voice-prompt/whisper_daemon.py");
+        if p.exists() {
+            return p;
+        }
+    }
+    // Dev fallback: source tree python/ dir
+    PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../python/whisper_daemon.py"
+    ))
 }
