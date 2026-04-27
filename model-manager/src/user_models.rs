@@ -43,7 +43,7 @@ pub fn load_user_models(app_local_data: &Path) -> Result<Vec<UserModelEntry>> {
         return Ok(vec![]);
     }
     let bytes = std::fs::read(&p)?;
-    Ok(serde_json::from_slice(&bytes).unwrap_or_default())
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 pub fn save_user_models(app_local_data: &Path, list: &[UserModelEntry]) -> Result<()> {
