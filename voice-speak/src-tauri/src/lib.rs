@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod clipboard;
 pub mod config;
+pub mod hotkey;
 pub mod piper;
 
 pub fn run() {
