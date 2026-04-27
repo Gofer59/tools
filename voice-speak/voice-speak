@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# voice-speak launcher — run this to start the app.
+# Works from a terminal or double-clicked in a file manager.
+
+TOOL="voice-speak"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolution order: installed → local build → offer install
+CANDIDATES=(
+    "$HOME/.local/bin/$TOOL"
+    "$SCRIPT_DIR/src-tauri/target/release/$TOOL"
+)
+
+for bin in "${CANDIDATES[@]}"; do
+    if [[ -x "$bin" ]]; then
+        exec "$bin" "$@"
+    fi
+done
+
+# ── Nothing found — offer to install ────────────────────────────────────────
+
+MSG="Voice Speak is not installed yet.\n\nRun './install.sh' from this folder to build and install it."
+
+# GUI dialog (file manager double-click)
+if ! [[ -t 0 ]]; then
+    if command -v zenity &>/dev/null; then
+        zenity --question \
+            --title="Voice Speak — Not installed" \
+            --text="$MSG\n\nRun the installer now?" \
+            --ok-label="Install" --cancel-label="Cancel" 2>/dev/null
+        if [[ $? -eq 0 ]]; then
+            TERM_EMULATORS=(gnome-terminal konsole xterm xfce4-terminal)
+            for t in "${TERM_EMULATORS[@]}"; do
+                if command -v "$t" &>/dev/null; then
+                    "$t" -- bash -c "cd '$SCRIPT_DIR' && bash install.sh; echo; read -rp 'Press Enter to close...' _"
+                    exit 0
+                fi
+            done
+            bash "$SCRIPT_DIR/install.sh"
+        fi
+    elif command -v kdialog &>/dev/null; then
+        kdialog --title "Voice Speak — Not installed" \
+            --yesno "$(echo -e "$MSG")\n\nRun the installer now?" 2>/dev/null
+        if [[ $? -eq 0 ]]; then
+            konsole -- bash -c "cd '$SCRIPT_DIR' && bash install.sh; read -rp 'Press Enter to close...' _" 2>/dev/null \
+                || bash "$SCRIPT_DIR/install.sh"
+        fi
+    fi
+    exit 0
+fi
+
+# Terminal fallback
+echo "Voice Speak is not installed."
+echo ""
+read -rp "Run './install.sh' now? [y/N] " answer
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+    bash "$SCRIPT_DIR/install.sh"
+fi
