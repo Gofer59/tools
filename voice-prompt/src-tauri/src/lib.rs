@@ -1,5 +1,6 @@
 mod config;
 mod hotkey;
+mod injection;
 mod whisper;
 
 pub fn run() {
