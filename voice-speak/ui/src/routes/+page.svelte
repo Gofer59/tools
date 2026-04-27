@@ -3,7 +3,7 @@
   import { config, DEFAULT_CONFIG, type Config } from '$lib/stores';
   import { getConfig, updateConfig, listenConfigApplied } from '$lib/tauri-config';
   import { testHotkey, listenHotkeyTriggered, listenHotkeyTestArmed } from '$lib/tauri-hotkey';
-  import { listCatalogModels, type ModelEntry } from '$lib/tauri-models';
+  import { listCatalogModels, listLocalModels, downloadModel, type ModelEntry, type LocalModel } from '$lib/tauri-models';
   import { t } from '$lib/i18n';
 
   // ── state ──────────────────────────────────────────────────────────────────
@@ -16,20 +16,20 @@
   let debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   let voiceCatalog = $state<ModelEntry[]>([]);
-  let voiceFilter = $state('');
+  let localModels = $state<LocalModel[]>([]);
+  let langFilter = $state('all');
 
   let unlistenConfig: (() => void) | null = null;
   let unlistenHotkey: (() => void) | null = null;
   let unlistenArmed: (() => void) | null = null;
 
+  let installedIds = $derived(new Set(localModels.map((m) => m.id)));
+  let availableLangs = $derived(['all', ...[...new Set(voiceCatalog.map((m) => m.language))].sort()]);
   let filteredVoices = $derived(
-    voiceCatalog.filter(
-      (m) =>
-        voiceFilter === '' ||
-        m.language.toLowerCase().includes(voiceFilter.toLowerCase()) ||
-        m.display_name.toLowerCase().includes(voiceFilter.toLowerCase()),
-    ),
+    voiceCatalog.filter((m) => langFilter === 'all' || m.language === langFilter),
   );
+  let selectedModel = $derived(voiceCatalog.find((m) => m.id === local.voice) ?? null);
+  let needsDownload = $derived(selectedModel !== null && !installedIds.has(local.voice));
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -38,9 +38,9 @@
     saved = { ...remote };
     config.set(remote);
 
-    voiceCatalog = await listCatalogModels();
+    [voiceCatalog, localModels] = await Promise.all([listCatalogModels(), listLocalModels()]);
 
-    unlistenConfig = await listenConfigApplied(({ field, value }) => {
+    unlistenConfig = await listenConfigApplied(({ field }) => {
       saveMsg = `✓ ${field} applied`;
       setTimeout(() => (saveMsg = ''), 2000);
     });
@@ -72,8 +72,7 @@
       try {
         await updateConfig({ [field]: value });
         saved = { ...local };
-      } catch (e) {
-        // Revert the field on error
+      } catch {
         local = { ...saved };
       }
     }, delay);
@@ -143,180 +142,185 @@
       console.log('preview_voice not yet wired', e);
     }
   }
+
+  function formatBytes(b: number): string {
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(0)} MB`;
+  }
+
+  // ── design tokens (classes reused throughout) ──────────────────────────────
+  const card = 'bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm space-y-3';
+  const sectionLabel = 'text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500';
+  const selectCls = 'w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors';
+  const chip = 'px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono';
+  const btnSecondary = 'px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 disabled:opacity-40 transition-colors';
 </script>
 
-<div class="space-y-6 max-w-2xl">
-  <h1 class="text-xl font-semibold">{t('settings')}</h1>
+<div class="space-y-3 max-w-sm">
 
   <!-- Hotkey -->
-  <section class="space-y-2">
-    <p class="text-sm font-medium">{t('hotkey')}</p>
-    <div class="flex items-center gap-2">
-      <span class="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded font-mono text-sm">
+  <div class={card}>
+    <p class={sectionLabel}>{t('hotkey')}</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm text-gray-800 dark:text-gray-200">
         {capturedHotkey ?? local.hotkey}
       </span>
       {#if armingHotkey}
-        <span class="text-sm text-blue-600 animate-pulse">{t('press_hotkey')}</span>
+        <span class="text-xs text-indigo-600 dark:text-indigo-400 animate-pulse font-medium">{t('press_hotkey')}</span>
       {:else}
-        <button
-          onclick={startHotkeyCapture}
-          class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-        >
-          Change
-        </button>
+        <button onclick={startHotkeyCapture} class={btnSecondary}>Change</button>
       {/if}
       {#if capturedHotkey}
         <button
           onclick={confirmHotkey}
-          class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+          class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Confirm
         </button>
       {/if}
     </div>
-  </section>
+  </div>
 
   <!-- Voice picker -->
-  <section class="space-y-2">
-    <label for="voice-filter" class="text-sm font-medium">{t('voice')}</label>
-    <input
-      id="voice-filter"
-      type="text"
-      placeholder="Filter by language or name…"
-      bind:value={voiceFilter}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm bg-white dark:bg-gray-900 mb-1"
-    />
-    <select
-      id="voice-select"
-      value={local.voice}
-      onchange={(e) => set('voice', (e.target as HTMLSelectElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm bg-white dark:bg-gray-900"
-      size="5"
-    >
-      {#each filteredVoices as m}
-        <option value={m.id}>{m.display_name} — {m.language}</option>
-      {/each}
-      {#if filteredVoices.length === 0}
-        <option disabled value="">No voices matched</option>
-      {/if}
-    </select>
-    <p class="text-xs text-gray-500">Current: <span class="font-mono">{local.voice}</span></p>
-  </section>
+  <div class={card}>
+    <p class={sectionLabel}>{t('voice')}</p>
 
-  <!-- Speed slider -->
-  <section class="space-y-2">
-    <label for="speed-slider" class="text-sm font-medium">
-      {t('speed')} — <span class="font-mono">{local.speed.toFixed(2)}</span>
-    </label>
+    <!-- Language filter -->
+    <div class="space-y-1">
+      <label class="text-xs text-gray-500 dark:text-gray-400">{t('language')}</label>
+      <select
+        value={langFilter}
+        onchange={(e) => (langFilter = (e.target as HTMLSelectElement).value)}
+        class={selectCls}
+      >
+        {#each availableLangs as lang}
+          <option value={lang}>{lang === 'all' ? 'All languages' : lang}</option>
+        {/each}
+      </select>
+    </div>
+
+    <!-- Voice dropdown -->
+    <div class="space-y-1">
+      <label class="text-xs text-gray-500 dark:text-gray-400">Model</label>
+      <select
+        value={local.voice}
+        onchange={(e) => set('voice', (e.target as HTMLSelectElement).value)}
+        class={selectCls}
+      >
+        {#each filteredVoices as m}
+          <option value={m.id}>
+            {installedIds.has(m.id) ? '✓' : '⬇'} {m.display_name} — {m.language}
+          </option>
+        {/each}
+        {#if filteredVoices.length === 0}
+          <option disabled value="">No voices for this language</option>
+        {/if}
+      </select>
+    </div>
+
+    <!-- Download notice for uninstalled selection -->
+    {#if needsDownload && selectedModel}
+      <div class="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
+        <span class="text-amber-500 text-sm leading-none mt-0.5 shrink-0">⬇</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium text-amber-700 dark:text-amber-300">Will download before first use</p>
+          <p class="text-xs text-amber-600 dark:text-amber-400 mt-0.5">~{formatBytes(selectedModel.size_bytes)}</p>
+        </div>
+        <button
+          onclick={() => downloadModel(local.voice)}
+          class="shrink-0 px-2.5 py-1 text-xs font-medium border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 rounded-md hover:bg-amber-100 dark:hover:bg-amber-800/40 transition-colors"
+        >
+          {t('download')}
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Speed -->
+  <div class={card}>
+    <div class="flex items-center justify-between">
+      <p class={sectionLabel}>{t('speed')}</p>
+      <span class={chip}>{local.speed.toFixed(2)}×</span>
+    </div>
     <input
-      id="speed-slider"
-      type="range"
-      min="0.5"
-      max="2.0"
-      step="0.05"
+      type="range" min="0.5" max="2.0" step="0.05"
       value={local.speed}
       oninput={(e) => set('speed', parseFloat((e.target as HTMLInputElement).value))}
-      class="w-full max-w-xs accent-blue-600"
+      class="w-full accent-indigo-600"
     />
-    <div class="flex justify-between text-xs text-gray-400 max-w-xs">
+    <div class="flex justify-between text-xs text-gray-400">
       <span>0.5×</span><span>2.0×</span>
     </div>
-  </section>
+  </div>
 
-  <!-- Noise scale slider -->
-  <section class="space-y-2">
-    <label for="noise-slider" class="text-sm font-medium">
-      {t('noise')} — <span class="font-mono">{local.noise_scale.toFixed(3)}</span>
-    </label>
+  <!-- Noise scale -->
+  <div class={card}>
+    <div class="flex items-center justify-between">
+      <p class={sectionLabel}>{t('noise')}</p>
+      <span class={chip}>{local.noise_scale.toFixed(3)}</span>
+    </div>
     <input
-      id="noise-slider"
-      type="range"
-      min="0.0"
-      max="1.0"
-      step="0.01"
+      type="range" min="0.0" max="1.0" step="0.01"
       value={local.noise_scale}
       oninput={(e) => set('noise_scale', parseFloat((e.target as HTMLInputElement).value))}
-      class="w-full max-w-xs accent-blue-600"
+      class="w-full accent-indigo-600"
     />
-    <div class="flex justify-between text-xs text-gray-400 max-w-xs">
+    <div class="flex justify-between text-xs text-gray-400">
       <span>0.0</span><span>1.0</span>
     </div>
-  </section>
+  </div>
 
-  <!-- Noise width slider -->
-  <section class="space-y-2">
-    <label for="noise-w-slider" class="text-sm font-medium">
-      {t('noise_w')} — <span class="font-mono">{local.noise_w_scale.toFixed(2)}</span>
-    </label>
+  <!-- Noise width -->
+  <div class={card}>
+    <div class="flex items-center justify-between">
+      <p class={sectionLabel}>{t('noise_w')}</p>
+      <span class={chip}>{local.noise_w_scale.toFixed(2)}</span>
+    </div>
     <input
-      id="noise-w-slider"
-      type="range"
-      min="0.0"
-      max="1.5"
-      step="0.05"
+      type="range" min="0.0" max="1.5" step="0.05"
       value={local.noise_w_scale}
       oninput={(e) => set('noise_w_scale', parseFloat((e.target as HTMLInputElement).value))}
-      class="w-full max-w-xs accent-blue-600"
+      class="w-full accent-indigo-600"
     />
-    <div class="flex justify-between text-xs text-gray-400 max-w-xs">
+    <div class="flex justify-between text-xs text-gray-400">
       <span>0.0</span><span>1.5</span>
     </div>
-  </section>
+  </div>
 
-  <!-- Python bin -->
-  <section class="space-y-2">
-    <label for="python-input" class="text-sm font-medium">{t('python')}</label>
+  <!-- Python interpreter -->
+  <div class={card}>
+    <label for="python-input" class={sectionLabel}>{t('python')}</label>
     <input
       id="python-input"
       type="text"
       value={local.python_bin}
       oninput={(e) => set('python_bin', (e.target as HTMLInputElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm font-mono bg-white dark:bg-gray-900"
+      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 font-mono text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
     />
-  </section>
+  </div>
 
   <!-- Test voice -->
-  <section class="space-y-2">
-    <p class="text-sm font-medium">{t('test_voice')}</p>
+  <div class={card}>
+    <p class={sectionLabel}>{t('test_voice')}</p>
     <button
       onclick={previewVoice}
-      class="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+      class="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
     >
       {t('play')}
     </button>
-  </section>
+  </div>
 
-  <!-- Status / save message -->
+  <!-- Status message -->
   {#if saveMsg}
-    <p class="text-sm text-green-600">{saveMsg}</p>
+    <p class="text-xs text-emerald-600 dark:text-emerald-400 px-1">{saveMsg}</p>
   {/if}
 
   <!-- Footer actions -->
-  <div class="flex gap-2 pt-4 border-t">
-    <button
-      onclick={discardChanges}
-      disabled={!dirty}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
-    >
-      {t('discard')}
-    </button>
-    <button
-      onclick={resetDefaults}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('reset')}
-    </button>
-    <button
-      onclick={exportConfig}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('export')}
-    </button>
-    <button
-      onclick={importConfig}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('import')}
-    </button>
+  <div class="flex gap-2 pt-1 flex-wrap border-t border-gray-200 dark:border-gray-700 pt-3">
+    <button onclick={discardChanges} disabled={!dirty} class={btnSecondary}>{t('discard')}</button>
+    <button onclick={resetDefaults} class={btnSecondary}>{t('reset')}</button>
+    <button onclick={exportConfig} class={btnSecondary}>{t('export')}</button>
+    <button onclick={importConfig} class={btnSecondary}>{t('import')}</button>
   </div>
+
 </div>

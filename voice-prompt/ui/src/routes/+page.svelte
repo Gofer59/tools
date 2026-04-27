@@ -19,26 +19,32 @@
   let unlistenArmed: (() => void) | null = null;
 
   const WHISPER_MODELS = [
-    { id: 'tiny', label: 'Tiny (~75 MB)' },
-    { id: 'base', label: 'Base (~145 MB)' },
-    { id: 'small', label: 'Small (~466 MB)' },
-    { id: 'medium', label: 'Medium (~1.5 GB)' },
+    { id: 'tiny',     label: 'Tiny (~75 MB)' },
+    { id: 'base',     label: 'Base (~145 MB)' },
+    { id: 'small',    label: 'Small (~466 MB)' },
+    { id: 'medium',   label: 'Medium (~1.5 GB)' },
     { id: 'large-v3', label: 'Large v3 (~2.9 GB)' },
   ];
 
   const LANGUAGES = [
-    { id: 'en', label: 'English' },
-    { id: 'fr', label: 'French' },
-    { id: 'de', label: 'German' },
-    { id: 'es', label: 'Spanish' },
+    { id: 'en',   label: 'English' },
+    { id: 'fr',   label: 'French' },
+    { id: 'de',   label: 'German' },
+    { id: 'es',   label: 'Spanish' },
+    { id: 'it',   label: 'Italian' },
+    { id: 'pt',   label: 'Portuguese' },
+    { id: 'nl',   label: 'Dutch' },
+    { id: 'ru',   label: 'Russian' },
+    { id: 'zh',   label: 'Chinese' },
+    { id: 'ja',   label: 'Japanese' },
     { id: 'auto', label: 'Auto-detect' },
   ];
 
   const COMPUTE_TYPES = [
-    { id: 'int8', label: 'int8 (fastest)' },
-    { id: 'int8_float16', label: 'int8_float16' },
-    { id: 'float16', label: 'float16' },
-    { id: 'float32', label: 'float32 (most accurate)' },
+    { id: 'int8',          label: 'int8 — fastest' },
+    { id: 'int8_float16',  label: 'int8_float16' },
+    { id: 'float16',       label: 'float16' },
+    { id: 'float32',       label: 'float32 — most accurate' },
   ];
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
@@ -48,7 +54,7 @@
     saved = { ...remote };
     config.set(remote);
 
-    unlistenConfig = await listenConfigApplied(({ field, value }) => {
+    unlistenConfig = await listenConfigApplied(({ field }) => {
       saveMsg = `✓ ${field} applied`;
       setTimeout(() => (saveMsg = ''), 2000);
     });
@@ -80,8 +86,7 @@
       try {
         await updateConfig({ [field]: value });
         saved = { ...local };
-      } catch (e) {
-        // Revert the field on error
+      } catch {
         local = { ...saved };
       }
     }, delay);
@@ -142,139 +147,125 @@
     };
     input.click();
   }
+
+  // ── design tokens ──────────────────────────────────────────────────────────
+  const card = 'bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm space-y-3';
+  const sectionLabel = 'text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500';
+  const selectCls = 'w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors';
+  const chip = 'px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono';
+  const btnSecondary = 'px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 disabled:opacity-40 transition-colors';
 </script>
 
-<div class="space-y-6 max-w-2xl">
-  <h1 class="text-xl font-semibold">{t('settings')}</h1>
+<div class="space-y-3 max-w-sm">
 
-  <!-- Hotkey -->
-  <section class="space-y-2">
-    <p class="text-sm font-medium">{t('hotkey')}</p>
-    <div class="flex items-center gap-2">
-      <span class="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded font-mono text-sm">
+  <!-- Hotkey (push-to-talk) -->
+  <div class={card}>
+    <p class={sectionLabel}>{t('hotkey')}</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm text-gray-800 dark:text-gray-200">
         {capturedHotkey ?? local.push_to_talk_key}
       </span>
       {#if armingHotkey}
-        <span class="text-sm text-blue-600 animate-pulse">{t('press_hotkey')}</span>
+        <span class="text-xs text-indigo-600 dark:text-indigo-400 animate-pulse font-medium">{t('press_hotkey')}</span>
       {:else}
-        <button
-          onclick={startHotkeyCapture}
-          class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-        >
-          Change
-        </button>
+        <button onclick={startHotkeyCapture} class={btnSecondary}>Change</button>
       {/if}
       {#if capturedHotkey}
         <button
           onclick={confirmHotkey}
-          class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+          class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Confirm
         </button>
       {/if}
     </div>
-  </section>
+  </div>
 
-  <!-- Whisper Model -->
-  <section class="space-y-2">
-    <label for="model-select" class="text-sm font-medium">{t('model')}</label>
-    <select
-      id="model-select"
-      value={local.whisper_model}
-      onchange={(e) => set('whisper_model', (e.target as HTMLSelectElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm bg-white dark:bg-gray-900"
-    >
-      {#each WHISPER_MODELS as m}
-        <option value={m.id}>{m.label}</option>
-      {/each}
-    </select>
-  </section>
+  <!-- Whisper model + language -->
+  <div class={card}>
+    <p class={sectionLabel}>Whisper</p>
 
-  <!-- Language -->
-  <section class="space-y-2">
-    <label for="lang-select" class="text-sm font-medium">{t('language')}</label>
-    <select
-      id="lang-select"
-      value={local.language}
-      onchange={(e) => set('language', (e.target as HTMLSelectElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm bg-white dark:bg-gray-900"
-    >
-      {#each LANGUAGES as l}
-        <option value={l.id}>{l.label}</option>
-      {/each}
-    </select>
-  </section>
+    <div class="space-y-1">
+      <label for="model-select" class="text-xs text-gray-500 dark:text-gray-400">{t('model')}</label>
+      <select
+        id="model-select"
+        value={local.whisper_model}
+        onchange={(e) => set('whisper_model', (e.target as HTMLSelectElement).value)}
+        class={selectCls}
+      >
+        {#each WHISPER_MODELS as m}
+          <option value={m.id}>{m.label}</option>
+        {/each}
+      </select>
+    </div>
+
+    <div class="space-y-1">
+      <label for="lang-select" class="text-xs text-gray-500 dark:text-gray-400">{t('language')}</label>
+      <select
+        id="lang-select"
+        value={local.language}
+        onchange={(e) => set('language', (e.target as HTMLSelectElement).value)}
+        class={selectCls}
+      >
+        {#each LANGUAGES as l}
+          <option value={l.id}>{l.label}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
 
   <!-- VAD filter -->
-  <section class="flex items-center gap-3">
-    <input
-      id="vad-toggle"
-      type="checkbox"
-      checked={local.vad_filter}
-      onchange={(e) => set('vad_filter', (e.target as HTMLInputElement).checked)}
-      class="w-4 h-4 accent-blue-600"
-    />
-    <label for="vad-toggle" class="text-sm font-medium">{t('vad')}</label>
-  </section>
-
-  <!-- Python bin -->
-  <section class="space-y-2">
-    <label for="python-input" class="text-sm font-medium">{t('python')}</label>
-    <input
-      id="python-input"
-      type="text"
-      value={local.python_bin}
-      oninput={(e) => set('python_bin', (e.target as HTMLInputElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm font-mono bg-white dark:bg-gray-900"
-    />
-  </section>
+  <div class="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 shadow-sm">
+    <label class="flex items-center gap-3 cursor-pointer">
+      <input
+        id="vad-toggle"
+        type="checkbox"
+        checked={local.vad_filter}
+        onchange={(e) => set('vad_filter', (e.target as HTMLInputElement).checked)}
+        class="w-4 h-4 accent-indigo-600 rounded"
+      />
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{t('vad')}</span>
+    </label>
+  </div>
 
   <!-- Compute type -->
-  <section class="space-y-2">
-    <label for="compute-select" class="text-sm font-medium">{t('compute')}</label>
+  <div class={card}>
+    <label for="compute-select" class={sectionLabel}>{t('compute')}</label>
     <select
       id="compute-select"
       value={local.compute_type}
       onchange={(e) => set('compute_type', (e.target as HTMLSelectElement).value)}
-      class="w-full max-w-xs px-3 py-2 border rounded text-sm bg-white dark:bg-gray-900"
+      class={selectCls}
     >
       {#each COMPUTE_TYPES as c}
         <option value={c.id}>{c.label}</option>
       {/each}
     </select>
-  </section>
+  </div>
 
-  <!-- Status / save message -->
+  <!-- Python interpreter -->
+  <div class={card}>
+    <label for="python-input" class={sectionLabel}>{t('python')}</label>
+    <input
+      id="python-input"
+      type="text"
+      value={local.python_bin}
+      oninput={(e) => set('python_bin', (e.target as HTMLInputElement).value)}
+      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 font-mono text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+    />
+  </div>
+
+  <!-- Status message -->
   {#if saveMsg}
-    <p class="text-sm text-green-600">{saveMsg}</p>
+    <p class="text-xs text-emerald-600 dark:text-emerald-400 px-1">{saveMsg}</p>
   {/if}
 
   <!-- Footer actions -->
-  <div class="flex gap-2 pt-4 border-t">
-    <button
-      onclick={discardChanges}
-      disabled={!dirty}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
-    >
-      {t('discard')}
-    </button>
-    <button
-      onclick={resetDefaults}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('reset')}
-    </button>
-    <button
-      onclick={exportConfig}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('export')}
-    </button>
-    <button
-      onclick={importConfig}
-      class="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      {t('import')}
-    </button>
+  <div class="flex gap-2 flex-wrap border-t border-gray-200 dark:border-gray-700 pt-3">
+    <button onclick={discardChanges} disabled={!dirty} class={btnSecondary}>{t('discard')}</button>
+    <button onclick={resetDefaults} class={btnSecondary}>{t('reset')}</button>
+    <button onclick={exportConfig} class={btnSecondary}>{t('export')}</button>
+    <button onclick={importConfig} class={btnSecondary}>{t('import')}</button>
   </div>
+
 </div>
