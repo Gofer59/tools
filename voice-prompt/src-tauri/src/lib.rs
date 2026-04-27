@@ -1,4 +1,5 @@
 mod audio_in;
+mod commands;
 mod config;
 pub mod events;
 mod hotkey;
