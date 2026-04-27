@@ -91,35 +91,31 @@ pub async fn speak(
         let v: Value = serde_json::from_str(line.trim())
             .with_context(|| format!("response not JSON: {line}"))?;
 
+        // PCM chunk header — arrives as its own line (one or more per "speaking" status)
+        if let Some(n_bytes) = v.get("audio_pcm_bytes").and_then(|x| x.as_u64()) {
+            let n_bytes = n_bytes as usize;
+            let sample_rate = v["sample_rate"].as_u64().unwrap_or(22050) as u32;
+            let chunk_id = v["id"].as_str().unwrap_or(id).to_string();
+
+            let mut pcm_bytes = vec![0u8; n_bytes];
+            // read_exact through the BufReader so its internal buffer stays consistent
+            reader.read_exact(&mut pcm_bytes).await?;
+
+            let samples: Vec<i16> = pcm_bytes
+                .chunks_exact(2)
+                .map(|b| i16::from_le_bytes([b[0], b[1]]))
+                .collect();
+
+            chunks.push(PcmChunk { id: chunk_id, sample_rate, samples });
+            continue;
+        }
+
         let status = v["status"].as_str().unwrap_or("");
         match status {
-            "speaking" => {
-                // Next JSON line is an audio header, then raw bytes
-                let mut hdr_line = String::new();
-                reader.read_line(&mut hdr_line).await?;
-                let hdr: Value = serde_json::from_str(hdr_line.trim())
-                    .with_context(|| format!("audio header not JSON: {hdr_line}"))?;
-                let n_bytes = hdr["audio_pcm_bytes"].as_u64().unwrap_or(0) as usize;
-                let sample_rate = hdr["sample_rate"].as_u64().unwrap_or(22050) as u32;
-                let chunk_id = hdr["id"].as_str().unwrap_or(id).to_string();
-
-                let mut pcm_bytes = vec![0u8; n_bytes];
-                reader.get_mut().read_exact(&mut pcm_bytes).await?;
-
-                let samples: Vec<i16> = pcm_bytes
-                    .chunks_exact(2)
-                    .map(|b| i16::from_le_bytes([b[0], b[1]]))
-                    .collect();
-
-                chunks.push(PcmChunk { id: chunk_id, sample_rate, samples });
-            }
+            "speaking" => { /* informational; PCM chunk headers follow as separate lines */ }
             "done" => break,
-            "error" => {
-                anyhow::bail!("daemon error: {}", v["message"]);
-            }
-            _ => {
-                // Ignore unexpected status lines (e.g. "stopped")
-            }
+            "error" => anyhow::bail!("daemon error: {}", v["message"]),
+            _ => {}
         }
     }
 

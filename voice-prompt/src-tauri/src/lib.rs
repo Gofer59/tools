@@ -25,6 +25,7 @@ pub struct AppState {
     pub download_map: Arc<Mutex<HashMap<String, CancellationToken>>>,
     pub test_hotkey_armed: Arc<AtomicBool>,
     pub recording_stop: Arc<AtomicBool>,
+    pub record_handle: Arc<Mutex<Option<audio_in::RecordHandle>>>,
 }
 
 pub fn run() {
@@ -72,6 +73,7 @@ pub fn run() {
                     download_map: Arc::new(Mutex::new(HashMap::new())),
                     test_hotkey_armed: Arc::new(AtomicBool::new(false)),
                     recording_stop: Arc::new(AtomicBool::new(false)),
+                    record_handle: Arc::new(Mutex::new(None)),
                 };
                 handle.manage(state);
 
@@ -144,22 +146,11 @@ async fn handle_hotkey_event(app: AppHandle, payload: &str) {
     let state_str = v["state"].as_str().unwrap_or("");
     match state_str {
         "pressed" => {
-            // Start recording
-            state
-                .recording_stop
-                .store(false, std::sync::atomic::Ordering::SeqCst);
+            state.recording_stop.store(false, std::sync::atomic::Ordering::SeqCst);
             let stop = state.recording_stop.clone();
             match audio_in::start_recording(stop) {
                 Ok(handle) => {
-                    // Store the handle — for simplicity store it as a task
-                    let app2 = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        // Wait for release signal — handled by "released" event
-                        // The recording thread polls the stop flag; we store the handle
-                        // in a thread-local for the released handler to collect.
-                        // For now, spawn the finish task as a background task.
-                        let _ = (handle, app2); // will be wired in released handler
-                    });
+                    *state.record_handle.lock().await = Some(handle);
                 }
                 Err(e) => {
                     eprintln!("[voice-prompt] recording start failed: {e}");
@@ -167,10 +158,40 @@ async fn handle_hotkey_event(app: AppHandle, payload: &str) {
             }
         }
         "released" => {
-            // Stop recording and transcribe
-            state
-                .recording_stop
-                .store(true, std::sync::atomic::Ordering::SeqCst);
+            state.recording_stop.store(true, std::sync::atomic::Ordering::SeqCst);
+
+            let handle_opt = state.record_handle.lock().await.take();
+            let Some(handle) = handle_opt else { return };
+
+            let wav = match tauri::async_runtime::spawn_blocking(move || {
+                audio_in::finish_recording(handle)
+            })
+            .await
+            {
+                Ok(Ok(f)) => f,
+                Ok(Err(e)) => { eprintln!("[voice-prompt] finish_recording: {e}"); return; }
+                Err(e) => { eprintln!("[voice-prompt] recording thread join: {e}"); return; }
+            };
+
+            let (language, vad) = {
+                let cfg = state.config.read().await;
+                (cfg.language.clone(), cfg.vad_filter)
+            };
+
+            let wav_path = wav.path().to_path_buf();
+            let mut daemon = state.daemon_ctrl.lock().await;
+            match whisper::transcribe(&mut *daemon, &wav_path, &language, vad).await {
+                Ok((text, _ms)) => {
+                    drop(daemon);
+                    drop(wav);
+                    if let Err(e) = injection::inject(&text) {
+                        eprintln!("[voice-prompt] inject: {e}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[voice-prompt] transcribe: {e}");
+                }
+            }
         }
         _ => {}
     }
