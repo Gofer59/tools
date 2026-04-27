@@ -1,0 +1,39 @@
+[package]
+name = "voice-speak"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "voice-speak"
+path = "src/main.rs"
+
+[lib]
+name = "voice_speak_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+tauri                        = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-shell           = "2"
+tauri-plugin-fs              = "2"
+tauri-plugin-dialog          = "2"
+tauri-plugin-notification    = "2"
+model-manager                = { path = "../../model-manager" }
+serde                        = { version = "1", features = ["derive"] }
+serde_json                   = "1"
+tokio                        = { version = "1", features = ["full"] }
+tokio-util                   = "0.7"
+arboard                      = "3"
+rodio                        = { version = "0.20", features = [] }
+enigo                        = "0.2"
+rdev                         = "0.5"
+anyhow                       = "1"
+dirs                         = "6"
