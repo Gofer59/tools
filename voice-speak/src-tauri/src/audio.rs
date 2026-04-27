@@ -53,4 +53,14 @@ impl AudioPlayer {
         let guard = self.sink.lock().await;
         guard.as_ref().map(|s| !s.empty()).unwrap_or(false)
     }
+
+    /// Resolves when the current sink drains naturally (or is already empty).
+    pub async fn wait_until_done(&self) {
+        loop {
+            if !self.is_playing().await {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
 }

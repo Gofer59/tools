@@ -29,7 +29,8 @@ pub struct AppState {
     pub daemon_ctrl: Arc<Mutex<piper::DaemonHandle>>,
     pub download_map: Arc<Mutex<HashMap<String, CancellationToken>>>,
     pub test_hotkey_armed: Arc<AtomicBool>,
-    pub audio_tx: std::sync::mpsc::SyncSender<AudioCmd>,
+    pub audio_tx: tokio::sync::mpsc::Sender<AudioCmd>,
+    pub is_speaking: Arc<AtomicBool>,
 }
 
 pub fn run() {
@@ -38,7 +39,9 @@ pub fn run() {
     // AudioPlayer holds rodio's OutputStream which is !Send, so it must live
     // entirely within this thread. We give the thread its own single-threaded
     // tokio runtime to drive the async play/stop methods.
-    let (audio_tx, audio_rx) = std::sync::mpsc::sync_channel::<AudioCmd>(4);
+    let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel::<AudioCmd>(4);
+    let is_speaking_audio = Arc::new(AtomicBool::new(false));
+    let is_speaking_state = is_speaking_audio.clone();
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -49,16 +52,37 @@ pub fn run() {
         rt.block_on(async move {
             let player = audio::AudioPlayer::new().expect("AudioPlayer init");
             loop {
-                // recv() blocks the thread until a message arrives; safe in
-                // block_on because we yield control back to tokio between awaits.
-                match audio_rx.recv() {
-                    Ok(AudioCmd::Play(chunks)) => {
+                match audio_rx.recv().await {
+                    Some(AudioCmd::Play(chunks)) => {
+                        is_speaking_audio.store(true, Ordering::SeqCst);
                         let _ = player.play(chunks).await;
+                        // Wait until natural end OR a Stop/Play arrives.
+                        loop {
+                            tokio::select! {
+                                cmd = audio_rx.recv() => {
+                                    match cmd {
+                                        Some(AudioCmd::Stop) | None => {
+                                            player.stop().await;
+                                            break;
+                                        }
+                                        Some(AudioCmd::Play(new_chunks)) => {
+                                            let _ = player.play(new_chunks).await;
+                                        }
+                                    }
+                                }
+                                _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
+                                    if !player.is_playing().await {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        is_speaking_audio.store(false, Ordering::SeqCst);
                     }
-                    Ok(AudioCmd::Stop) => {
+                    Some(AudioCmd::Stop) => {
                         player.stop().await;
                     }
-                    Err(_) => break, // channel closed — app is shutting down
+                    None => break,
                 }
             }
         });
@@ -100,6 +124,7 @@ pub fn run() {
                     download_map: Arc::new(Mutex::new(HashMap::new())),
                     test_hotkey_armed: Arc::new(AtomicBool::new(false)),
                     audio_tx: audio_tx_for_state,
+                    is_speaking: is_speaking_state,
                 };
                 handle.manage(state);
 
@@ -149,80 +174,74 @@ pub fn run() {
 
 /// Listen for `hotkey-triggered` events and toggle TTS speak/stop.
 fn wire_hotkey_pipeline(app: AppHandle) {
-    // Track whether we are currently speaking so each press toggles.
-    let speaking = Arc::new(AtomicBool::new(false));
-
     app.clone().listen("hotkey-triggered", move |ev| {
         let v: serde_json::Value = match serde_json::from_str(ev.payload()) {
             Ok(v) => v,
             Err(_) => return,
         };
-        // Only react to the key-press edge; ignore release.
         if v["state"].as_str() != Some("pressed") {
             return;
         }
 
         let app2 = app.clone();
-        let speaking2 = speaking.clone();
-
         tauri::async_runtime::spawn(async move {
             let state = match app2.try_state::<AppState>() {
                 Some(s) => s,
                 None => return,
             };
 
-            let currently_speaking = speaking2.load(Ordering::SeqCst);
-
-            if currently_speaking {
-                // Stop playback
-                let _ = state.audio_tx.send(AudioCmd::Stop);
-                let daemon = state.daemon_ctrl.lock().await;
-                let _ = piper::stop(&daemon, "tts").await;
-                speaking2.store(false, Ordering::SeqCst);
+            if state.is_speaking.load(Ordering::SeqCst) {
+                // Second press — stop playback. The audio thread clears is_speaking when done.
+                let _ = state.audio_tx.send(AudioCmd::Stop).await;
+                state.is_speaking.store(false, Ordering::SeqCst);
                 let _ = app2.emit("tts-state", serde_json::json!({"state": "stopped"}));
-            } else {
-                // Read selected text, synthesize, play
-                let text = match clipboard::read_selection() {
-                    Ok(t) if !t.is_empty() => t,
-                    _ => return,
-                };
+                return;
+            }
 
-                speaking2.store(true, Ordering::SeqCst);
-                let _ = app2.emit("tts-state", serde_json::json!({"state": "speaking"}));
-
-                let cfg = state.config.read().await.clone();
-                let chunks = {
-                    let daemon = state.daemon_ctrl.lock().await;
-                    piper::speak(
-                        &daemon,
-                        &text,
-                        &cfg.voice,
-                        cfg.speed,
-                        cfg.noise_scale,
-                        cfg.noise_w_scale,
-                        "tts",
-                    )
-                    .await
-                };
-
-                match chunks {
-                    Ok(pcm) => {
-                        let _ = state.audio_tx.send(AudioCmd::Play(pcm));
-                    }
-                    Err(e) => {
-                        eprintln!("[voice-speak] speak error: {e}");
-                        speaking2.store(false, Ordering::SeqCst);
-                        let _ = app2.emit(
-                            "tts-state",
-                            serde_json::json!({"state": "error", "message": e.to_string()}),
-                        );
-                        return;
-                    }
+            // First press — read text and speak.
+            let text = match clipboard::read_selection() {
+                Ok(t) if !t.is_empty() => t,
+                Ok(_) => {
+                    eprintln!("[voice-speak] nothing to read (selection and clipboard both empty)");
+                    return;
                 }
+                Err(e) => {
+                    eprintln!("[voice-speak] clipboard read: {e}");
+                    return;
+                }
+            };
 
-                // After audio is queued, mark done
-                speaking2.store(false, Ordering::SeqCst);
-                let _ = app2.emit("tts-state", serde_json::json!({"state": "done"}));
+            state.is_speaking.store(true, Ordering::SeqCst);
+            let _ = app2.emit("tts-state", serde_json::json!({"state": "speaking"}));
+
+            let cfg = state.config.read().await.clone();
+            let chunks = {
+                let daemon = state.daemon_ctrl.lock().await;
+                piper::speak(
+                    &daemon,
+                    &text,
+                    &cfg.voice,
+                    cfg.speed,
+                    cfg.noise_scale,
+                    cfg.noise_w_scale,
+                    "tts",
+                )
+                .await
+            };
+
+            match chunks {
+                Ok(pcm) => {
+                    // Queue audio; audio thread owns is_speaking and clears it when done.
+                    let _ = state.audio_tx.send(AudioCmd::Play(pcm)).await;
+                }
+                Err(e) => {
+                    eprintln!("[voice-speak] speak error: {e}");
+                    state.is_speaking.store(false, Ordering::SeqCst);
+                    let _ = app2.emit(
+                        "tts-state",
+                        serde_json::json!({"state": "error", "message": e.to_string()}),
+                    );
+                }
             }
         });
     });

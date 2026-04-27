@@ -1,20 +1,15 @@
 use anyhow::{Context, Result};
-use enigo::{Direction, Enigo, Keyboard, Settings};
+use std::process::Command;
 
 pub fn inject(text: &str) -> Result<()> {
     if text.is_empty() {
         return Ok(());
     }
-    let mut enigo = Enigo::new(&Settings::default()).context("enigo init")?;
-    // Release common modifiers held during push-to-talk before typing
-    for k in [
-        enigo::Key::Control,
-        enigo::Key::Alt,
-        enigo::Key::Shift,
-        enigo::Key::Meta,
-    ] {
-        let _ = enigo.key(k, Direction::Release);
-    }
-    enigo.text(text).context("enigo text")?;
+    // xdotool with per-keystroke delay; without --delay spaces get dropped at
+    // high typing speed in most desktop environments on X11.
+    Command::new("xdotool")
+        .args(["type", "--clearmodifiers", "--delay", "12", "--", text])
+        .status()
+        .context("xdotool type")?;
     Ok(())
 }
