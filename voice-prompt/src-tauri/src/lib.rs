@@ -1,3 +1,4 @@
+mod audio_in;
 mod config;
 mod hotkey;
 mod injection;
