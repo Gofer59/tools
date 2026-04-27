@@ -1,4 +1,5 @@
 pub mod config;
+pub mod piper;
 
 pub fn run() {
     tauri::Builder::default()
