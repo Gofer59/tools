@@ -1,4 +1,5 @@
 mod config;
+mod hotkey;
 mod whisper;
 
 pub fn run() {
