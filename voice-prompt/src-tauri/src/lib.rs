@@ -1,5 +1,6 @@
 mod audio_in;
 mod config;
+pub mod events;
 mod hotkey;
 mod injection;
 mod whisper;
