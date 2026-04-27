@@ -68,3 +68,6 @@ Thumbs.db
 # Cache
 *.cache.json
 *.claude_cache.json
+
+# Git worktrees
+.worktrees/
