@@ -70,7 +70,7 @@ pub async fn download_model(
         .app_local_data_dir()
         .map_err(|e| e.to_string())?
         .join("models")
-        .join(&entry.id);
+        .join(entry.id);
 
     tokio::fs::create_dir_all(&dir)
         .await

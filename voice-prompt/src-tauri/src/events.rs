@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+#[allow(dead_code)]
 #[derive(Serialize, Clone)]
 pub struct ConfigApplied {
     pub field: String,
@@ -27,18 +28,21 @@ pub struct DownloadError {
     pub message: String,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Clone)]
 pub struct HotkeyTriggered {
     pub tool: String,
     pub state: String,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Clone)]
 pub struct TranscriptionResult {
     pub text: String,
     pub duration_ms: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize, Clone)]
 pub struct DaemonReady {
     pub model: String,
