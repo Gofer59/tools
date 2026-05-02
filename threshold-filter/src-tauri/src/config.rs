@@ -40,7 +40,7 @@ pub fn load_or_default(dir: &Path) -> Config {
     Config::default()
 }
 
-pub fn save(dir: &Path, cfg: &Config) -> Result<()> {
+pub fn save(cfg: &Config, dir: &Path) -> Result<()> {
     let p = config_path(dir);
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent)?;

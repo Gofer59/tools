@@ -1,9 +1,8 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, atomic::Ordering};
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
+
+use crate::AppState;
 
 /// Arm a one-shot rdev listener to capture the next keypress and report it back
 /// via the "hotkey-captured" event.
@@ -11,11 +10,18 @@ use tauri::{AppHandle, Emitter};
 /// `which` is an opaque tag the UI passes to correlate the result (e.g.
 /// "region_select_hotkey" or "toggle_on_top_hotkey").
 #[tauri::command]
-pub async fn test_hotkey(app: AppHandle, which: String) -> Result<(), String> {
+pub async fn test_hotkey(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    which: String,
+) -> Result<(), String> {
+    // Prevent concurrent capture sessions.
+    if state.test_hotkey_armed.swap(true, Ordering::SeqCst) {
+        return Err("hotkey capture already in progress".to_string());
+    }
     let _ = app.emit("hotkey-test-armed", serde_json::json!({"which": which}));
 
-    let armed = Arc::new(AtomicBool::new(true));
-    let armed2 = armed.clone();
+    let armed2 = state.test_hotkey_armed.clone();
 
     std::thread::spawn(move || {
         // Collect held keys so we can build "Modifier+Key" strings.

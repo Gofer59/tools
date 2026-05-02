@@ -2,7 +2,7 @@ pub mod commands;
 pub mod config;
 pub mod overlay;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicBool};
 use tokio::sync::{Mutex, RwLock};
 
 use tauri::{Manager, Emitter};
@@ -12,6 +12,7 @@ use tauri::tray::TrayIconBuilder;
 pub struct AppState {
     pub config: Arc<RwLock<config::Config>>,
     pub overlay_child: Arc<Mutex<Option<std::process::Child>>>,
+    pub test_hotkey_armed: Arc<AtomicBool>,
 }
 
 pub fn run() {
@@ -30,6 +31,7 @@ pub fn run() {
                 let state = AppState {
                     config: Arc::new(RwLock::new(cfg)),
                     overlay_child: Arc::new(Mutex::new(None)),
+                    test_hotkey_armed: Arc::new(AtomicBool::new(false)),
                 };
                 handle.manage(state);
 
