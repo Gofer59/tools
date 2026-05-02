@@ -386,13 +386,19 @@ impl ThresholdApp {
     }
 
     fn save_config(&mut self) {
+        // Preserve auto_start_overlay — that field is owned by the Tauri settings window.
+        let existing_auto_start = config_json_path()
+            .and_then(|p| std::fs::read(&p).ok())
+            .and_then(|b| serde_json::from_slice::<SavedConfig>(&b).ok())
+            .map(|c| c.auto_start_overlay)
+            .unwrap_or(false);
         let cfg = SavedConfig {
             region_select_hotkey: self.cfg_hotkey_reselect.clone(),
             toggle_on_top_hotkey: self.cfg_hotkey_toggle.clone(),
             default_threshold: self.cfg_default_thr,
             default_invert: self.cfg_default_invert,
             default_always_on_top: self.cfg_default_aot,
-            auto_start_overlay: false,
+            auto_start_overlay: existing_auto_start,
         };
         match config_json_path() {
             None => {

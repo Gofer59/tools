@@ -20,6 +20,7 @@ pub async fn update_config(
     let partial_obj = partial.as_object().ok_or("partial not an object")?;
 
     let mut changed_hotkey = false;
+    let mut applied: serde_json::Map<String, Value> = serde_json::Map::new();
     for (k, v) in partial_obj {
         // Skip null values and empty strings (partial-update semantics).
         if v.is_null() || v.as_str().is_some_and(|s| s.is_empty()) {
@@ -30,6 +31,7 @@ pub async fn update_config(
             changed_hotkey = true;
         }
         obj.insert(k.clone(), v.clone());
+        applied.insert(k.clone(), v.clone());
     }
 
     let new_cfg: Config = serde_json::from_value(cfg_json).map_err(|e| e.to_string())?;
@@ -60,6 +62,6 @@ pub async fn update_config(
         }
     }
 
-    let _ = app.emit("config-applied", serde_json::json!({"partial": partial_obj}));
+    let _ = app.emit("config-applied", serde_json::json!({"applied": applied}));
     Ok(())
 }

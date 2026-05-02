@@ -46,8 +46,13 @@ pub async fn test_hotkey(
                             .copied();
 
                         let key_str = rdev_key_to_str(key);
+                        // Skip unrecognized keys — they'd produce an unparseable string.
+                        if key_str.is_none() {
+                            return;
+                        }
+                        let key_str = key_str.unwrap();
                         let captured = match modifier {
-                            Some(m) => format!("{}+{}", rdev_key_to_str(m), key_str),
+                            Some(m) => format!("{}+{}", rdev_key_to_str(m).unwrap_or_default(), key_str),
                             None => key_str,
                         };
 
@@ -85,13 +90,15 @@ fn is_modifier(k: rdev::Key) -> bool {
     )
 }
 
-fn rdev_key_to_str(k: rdev::Key) -> String {
-    match k {
+fn rdev_key_to_str(k: rdev::Key) -> Option<String> {
+    Some(match k {
         rdev::Key::Alt => "Alt".to_string(),
         rdev::Key::AltGr => "AltGr".to_string(),
         rdev::Key::ControlLeft | rdev::Key::ControlRight => "Ctrl".to_string(),
-        rdev::Key::ShiftLeft | rdev::Key::ShiftRight => "ShiftLeft".to_string(),
-        rdev::Key::MetaLeft | rdev::Key::MetaRight => "MetaLeft".to_string(),
+        rdev::Key::ShiftLeft => "ShiftLeft".to_string(),
+        rdev::Key::ShiftRight => "ShiftRight".to_string(),
+        rdev::Key::MetaLeft => "MetaLeft".to_string(),
+        rdev::Key::MetaRight => "MetaRight".to_string(),
         rdev::Key::KeyA => "KeyA".to_string(),
         rdev::Key::KeyB => "KeyB".to_string(),
         rdev::Key::KeyC => "KeyC".to_string(),
@@ -144,6 +151,6 @@ fn rdev_key_to_str(k: rdev::Key) -> String {
         rdev::Key::RightArrow => "Right".to_string(),
         rdev::Key::CapsLock => "CapsLock".to_string(),
         rdev::Key::Unknown(code) => format!("Unknown({code})"),
-        _ => "Unknown".to_string(),
-    }
+        _ => return None,
+    })
 }
