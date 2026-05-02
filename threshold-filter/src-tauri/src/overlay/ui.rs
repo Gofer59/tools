@@ -289,7 +289,6 @@ impl ThresholdApp {
         // content area (right of the sidebar) sits exactly at (screen_x, screen_y).
         self.resize_to = Some((crop_w as f32, crop_h as f32));
         self.reposition_to = Some((screen_x, screen_y));
-        self.align_pending = Some((screen_x, screen_y));
     }
 
     #[cfg(target_os = "linux")]
@@ -450,7 +449,25 @@ impl eframe::App for ThresholdApp {
         #[cfg(target_os = "linux")]
         self.poll_selection();
 
-        // Resize + reposition after selection
+        // Pixel-perfect one-frame delta correction (Frame N+1: viewport has settled)
+        if let Some((target_cx, target_cy)) = self.align_pending.take() {
+            let inner = ctx.input(|i| i.viewport().inner_rect);
+            let outer = ctx.input(|i| i.viewport().outer_rect);
+            if let (Some(inner), Some(outer)) = (inner, outer) {
+                let actual_content_x = inner.min.x + PANEL_WIDTH;
+                let actual_content_y = inner.min.y;
+                let dx = target_cx as f32 - actual_content_x;
+                let dy = target_cy as f32 - actual_content_y;
+                if dx.abs() > 0.5 || dy.abs() > 0.5 {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
+                        outer.min.x + dx,
+                        outer.min.y + dy,
+                    )));
+                }
+            }
+        }
+
+        // Resize + reposition after selection (Frame N: send initial commands, arm align_pending)
         if let Some((w, h)) = self.resize_to.take() {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
                 PANEL_WIDTH + w,
@@ -487,24 +504,9 @@ impl eframe::App for ThresholdApp {
                     target_content_y.max(0) as f32,
                 )));
             }
-        }
 
-        // Pixel-perfect one-frame delta correction
-        if let Some((target_cx, target_cy)) = self.align_pending.take() {
-            let inner = ctx.input(|i| i.viewport().inner_rect);
-            let outer = ctx.input(|i| i.viewport().outer_rect);
-            if let (Some(inner), Some(outer)) = (inner, outer) {
-                let actual_content_x = inner.min.x + PANEL_WIDTH;
-                let actual_content_y = inner.min.y;
-                let dx = target_cx as f32 - actual_content_x;
-                let dy = target_cy as f32 - actual_content_y;
-                if dx.abs() > 0.5 || dy.abs() > 0.5 {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
-                        outer.min.x + dx,
-                        outer.min.y + dy,
-                    )));
-                }
-            }
+            // Arm delta correction for the NEXT frame (after viewport reflects InnerSize/OuterPosition)
+            self.align_pending = Some((target_content_x, target_content_y));
         }
 
         // Process pending move (Windows: ViewportCommand; Linux: already done in move_window)
