@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { locale, strings } from '$lib/i18n';
-  import { t } from '$lib/i18n';
+  import { locale, strings, t } from '$lib/i18n';
 
   const VERSION = '0.1.0';
   const LICENSE = 'MIT';

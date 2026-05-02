@@ -87,8 +87,9 @@
 
   async function confirmHotkey() {
     if (!capturedKey || !capturedWhich) return;
-    const field = capturedWhich as keyof Config;
-    set(field, capturedKey as Config[typeof field]);
+    // Only string-typed hotkey fields are valid targets for key capture.
+    if (capturedWhich !== 'region_select_hotkey' && capturedWhich !== 'toggle_on_top_hotkey') return;
+    set(capturedWhich, capturedKey);
     capturedKey = null;
     capturedWhich = null;
   }
