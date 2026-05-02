@@ -22,15 +22,17 @@ fn config_json_path() -> Option<std::path::PathBuf> {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SavedConfig {
     #[serde(default)]
-    hotkey_reselect: String,
+    region_select_hotkey: String,
     #[serde(default)]
-    hotkey_toggle: String,
+    toggle_on_top_hotkey: String,
     #[serde(default = "default_threshold")]
     default_threshold: u8,
     #[serde(default)]
     default_invert: bool,
     #[serde(default = "default_true")]
-    default_aot: bool,
+    default_always_on_top: bool,
+    #[serde(default)]
+    auto_start_overlay: bool,
 }
 
 fn default_threshold() -> u8 { 128 }
@@ -39,11 +41,12 @@ fn default_true() -> bool { true }
 impl Default for SavedConfig {
     fn default() -> Self {
         Self {
-            hotkey_reselect: String::new(),
-            hotkey_toggle: String::new(),
+            region_select_hotkey: String::new(),
+            toggle_on_top_hotkey: String::new(),
             default_threshold: 128,
             default_invert: false,
-            default_aot: true,
+            default_always_on_top: true,
+            auto_start_overlay: false,
         }
     }
 }
@@ -172,19 +175,19 @@ impl ThresholdApp {
             pending_move: None,
             pending_on_top: None,
             align_pending: None,
-            cfg_hotkey_reselect: if saved.hotkey_reselect.is_empty() {
+            cfg_hotkey_reselect: if saved.region_select_hotkey.is_empty() {
                 key_reselect_name
             } else {
-                saved.hotkey_reselect
+                saved.region_select_hotkey
             },
-            cfg_hotkey_toggle: if saved.hotkey_toggle.is_empty() {
+            cfg_hotkey_toggle: if saved.toggle_on_top_hotkey.is_empty() {
                 key_toggle_top_name
             } else {
-                saved.hotkey_toggle
+                saved.toggle_on_top_hotkey
             },
             cfg_default_thr: saved.default_threshold,
             cfg_default_invert: saved.default_invert,
-            cfg_default_aot: saved.default_aot,
+            cfg_default_aot: saved.default_always_on_top,
             cfg_status_msg: String::new(),
             cfg_status_time: None,
             #[cfg(target_os = "linux")]
@@ -384,11 +387,12 @@ impl ThresholdApp {
 
     fn save_config(&mut self) {
         let cfg = SavedConfig {
-            hotkey_reselect: self.cfg_hotkey_reselect.clone(),
-            hotkey_toggle: self.cfg_hotkey_toggle.clone(),
+            region_select_hotkey: self.cfg_hotkey_reselect.clone(),
+            toggle_on_top_hotkey: self.cfg_hotkey_toggle.clone(),
             default_threshold: self.cfg_default_thr,
             default_invert: self.cfg_default_invert,
-            default_aot: self.cfg_default_aot,
+            default_always_on_top: self.cfg_default_aot,
+            auto_start_overlay: false,
         };
         match config_json_path() {
             None => {

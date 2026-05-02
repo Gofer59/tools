@@ -12,21 +12,24 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct OverlayConfig {
-    pub hotkey_reselect: String,
-    pub hotkey_toggle: String,
+    pub region_select_hotkey: String,
+    pub toggle_on_top_hotkey: String,
     pub default_threshold: u8,
     pub default_invert: bool,
-    pub default_aot: bool,
+    pub default_always_on_top: bool,
+    #[serde(default)]
+    pub auto_start_overlay: bool,
 }
 
 impl Default for OverlayConfig {
     fn default() -> Self {
         Self {
-            hotkey_reselect: "F10".to_string(),
-            hotkey_toggle: "F9".to_string(),
+            region_select_hotkey: "F10".to_string(),
+            toggle_on_top_hotkey: "F9".to_string(),
             default_threshold: 128,
             default_invert: false,
-            default_aot: true,
+            default_always_on_top: true,
+            auto_start_overlay: false,
         }
     }
 }
@@ -130,22 +133,22 @@ pub fn run_overlay() {
 
     let cfg = load_config();
 
-    let hk_reselect = parse_hotkey(&cfg.hotkey_reselect)
+    let hk_reselect = parse_hotkey(&cfg.region_select_hotkey)
         .unwrap_or_else(|e| {
-            eprintln!("[threshold-filter] Bad hotkey_reselect: {e}; defaulting to F10");
+            eprintln!("[threshold-filter] Bad region_select_hotkey: {e}; defaulting to F10");
             (None, rdev::Key::F10)
         });
-    let hk_toggle_top = parse_hotkey(&cfg.hotkey_toggle)
+    let hk_toggle_top = parse_hotkey(&cfg.toggle_on_top_hotkey)
         .unwrap_or_else(|e| {
-            eprintln!("[threshold-filter] Bad hotkey_toggle: {e}; defaulting to F9");
+            eprintln!("[threshold-filter] Bad toggle_on_top_hotkey: {e}; defaulting to F9");
             (None, rdev::Key::F9)
         });
 
-    let always_on_top = cfg.default_aot;
+    let always_on_top = cfg.default_always_on_top;
     let default_threshold = cfg.default_threshold;
     let invert = cfg.default_invert;
-    let key_reselect_name = cfg.hotkey_reselect.clone();
-    let key_toggle_top_name = cfg.hotkey_toggle.clone();
+    let key_reselect_name = cfg.region_select_hotkey.clone();
+    let key_toggle_top_name = cfg.toggle_on_top_hotkey.clone();
 
     let (action_tx, action_rx) = std::sync::mpsc::channel::<hotkey::HotkeyAction>();
     hotkey::spawn_hotkey_listener(action_tx, hk_reselect, hk_toggle_top);
