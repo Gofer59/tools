@@ -89,8 +89,8 @@
 
   async function confirmHotkey() {
     if (!capturedKey || !capturedWhich) return;
-    const field = capturedWhich as keyof Config;
-    set(field, capturedKey);
+    if (capturedWhich !== 'hotkey_quick_capture' && capturedWhich !== 'hotkey_select_region' && capturedWhich !== 'hotkey_stop_tts') return;
+    set(capturedWhich, capturedKey);
     capturedKey = null;
     capturedWhich = null;
   }
