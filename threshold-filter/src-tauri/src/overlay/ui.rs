@@ -19,7 +19,7 @@ fn config_json_path() -> Option<std::path::PathBuf> {
 
 // --- JSON config struct for saving ---
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct SavedConfig {
     #[serde(default)]
     hotkey_reselect: String,
@@ -35,6 +35,18 @@ struct SavedConfig {
 
 fn default_threshold() -> u8 { 128 }
 fn default_true() -> bool { true }
+
+impl Default for SavedConfig {
+    fn default() -> Self {
+        Self {
+            hotkey_reselect: String::new(),
+            hotkey_toggle: String::new(),
+            default_threshold: 128,
+            default_invert: false,
+            default_aot: true,
+        }
+    }
+}
 
 // --- Selection result (used on Linux via channel, on Windows directly) ---
 
@@ -449,7 +461,9 @@ impl eframe::App for ThresholdApp {
         #[cfg(target_os = "linux")]
         self.poll_selection();
 
-        // Pixel-perfect one-frame delta correction (Frame N+1: viewport has settled)
+        // Frame N+1: viewport has settled after last frame's InnerSize+OuterPosition.
+        // This block MUST precede the resize_to/reposition_to block below so that
+        // a freshly-armed align_pending is never consumed in the same frame it's set.
         if let Some((target_cx, target_cy)) = self.align_pending.take() {
             let inner = ctx.input(|i| i.viewport().inner_rect);
             let outer = ctx.input(|i| i.viewport().outer_rect);
@@ -467,7 +481,8 @@ impl eframe::App for ThresholdApp {
             }
         }
 
-        // Resize + reposition after selection (Frame N: send initial commands, arm align_pending)
+        // Frame N: send initial window geometry commands, then arm align_pending
+        // so the delta correction fires next frame after the viewport responds.
         if let Some((w, h)) = self.resize_to.take() {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
                 PANEL_WIDTH + w,
@@ -568,7 +583,7 @@ impl eframe::App for ThresholdApp {
                     // 2. Sel button
                     let btn = ui.add_sized(
                         [ui.available_width(), 0.0],
-                        egui::Button::new("Sel").min_size(egui::vec2(ui.available_width(), 0.0)),
+                        egui::Button::new("Sel"),
                     );
                     if btn
                         .on_hover_text(format!(

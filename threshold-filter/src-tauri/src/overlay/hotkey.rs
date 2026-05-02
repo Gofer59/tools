@@ -120,13 +120,14 @@ fn spawn_hotkey_listener_windows(
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::RegisterHotKey;
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
 
-    std::thread::spawn(move || unsafe {
+    std::thread::spawn(move || {
         const MOD_NOREPEAT: u32 = 0x4000;
 
         let try_register = |id: i32, hk: (Option<rdev::Key>, rdev::Key)| {
             if let Some(vk) = rdev_key_to_vk(hk.1) {
                 let mods = hk.0.map(rdev_key_to_mod).unwrap_or(0) | MOD_NOREPEAT;
-                if RegisterHotKey(0, id, mods, vk) == 0 {
+                // SAFETY: hwnd=0 is valid (session-global); called from a dedicated thread.
+                if unsafe { RegisterHotKey(0, id, mods, vk) } == 0 {
                     eprintln!(
                         "[threshold-filter] RegisterHotKey id={id} failed \
                          (hotkey may already be in use by another app)"
@@ -140,8 +141,10 @@ fn spawn_hotkey_listener_windows(
         try_register(1, hk_reselect);
         try_register(2, hk_toggle_top);
 
-        let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, 0, 0, 0) > 0 {
+        // SAFETY: MSG is a plain C struct; zero-initializing it is valid per the Win32 docs.
+        let mut msg: MSG = unsafe { std::mem::zeroed() };
+        // SAFETY: &mut msg is valid for the duration of the call.
+        while unsafe { GetMessageW(&mut msg, 0, 0, 0) } > 0 {
             if msg.message == WM_HOTKEY {
                 match msg.wParam as i32 {
                     1 => { let _ = action_tx.send(HotkeyAction::Reselect); }
