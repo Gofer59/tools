@@ -8,9 +8,14 @@ use tauri::{AppHandle, Emitter, State};
 #[tauri::command]
 pub async fn test_hotkey(
     app: AppHandle,
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     which: String,
 ) -> Result<(), String> {
+    // Prevent concurrent capture sessions.
+    if state.test_hotkey_armed.swap(true, Ordering::SeqCst) {
+        return Ok(()); // already armed, ignore duplicate call
+    }
+
     // Signal that we're armed and waiting for a keypress.
     let _ = app.emit("hotkey-test-armed", serde_json::json!({"which": which}));
 
@@ -18,9 +23,10 @@ pub async fn test_hotkey(
     let which2 = which.clone();
     let stop = Arc::new(AtomicBool::new(false));
     let stop2 = stop.clone();
+    let armed = state.test_hotkey_armed.clone();
 
     std::thread::spawn(move || {
-        capture_next_key(app2, which2, stop2);
+        capture_next_key(app2, which2, stop2, armed);
     });
 
     // The rdev listener runs in its own thread; we return immediately.
@@ -28,7 +34,7 @@ pub async fn test_hotkey(
     Ok(())
 }
 
-fn capture_next_key(app: AppHandle, which: String, stop: Arc<AtomicBool>) {
+fn capture_next_key(app: AppHandle, which: String, stop: Arc<AtomicBool>, armed: Arc<AtomicBool>) {
     let captured: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
     let captured2 = captured.clone();
     let stop2 = stop.clone();
@@ -45,6 +51,7 @@ fn capture_next_key(app: AppHandle, which: String, stop: Arc<AtomicBool>) {
             if c.is_none() {
                 *c = Some(name.clone());
                 stop2.store(true, Ordering::SeqCst);
+                armed.store(false, Ordering::SeqCst);
                 let _ = app2.emit(
                     "hotkey-captured",
                     serde_json::json!({"captured": name, "which": which2}),

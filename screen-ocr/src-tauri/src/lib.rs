@@ -12,6 +12,7 @@ mod tts;
 mod typing;
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::{Mutex, RwLock};
 
 use tauri::{AppHandle, Manager};
@@ -28,6 +29,7 @@ pub struct AppState {
     pub tts_child: Arc<Mutex<Option<std::process::Child>>>,
     pub last_region: Arc<Mutex<Option<region::Region>>>,
     pub display: DisplayServer,
+    pub test_hotkey_armed: Arc<AtomicBool>,
 }
 
 pub fn run() {
@@ -95,14 +97,20 @@ async fn setup(app: AppHandle) {
     let hk_stop = hotkey::register(&app, &cfg.hotkey_stop_tts, "stop")
         .expect("register hotkey_stop_tts");
 
+    let saved_region = region::load(&paths::region_path()).ok();
+    if saved_region.is_some() {
+        eprintln!("[screen-ocr] Loaded saved region from disk.");
+    }
+
     let state = AppState {
         config: Arc::new(RwLock::new(cfg)),
         hotkey_quick: Arc::new(Mutex::new(hk_quick)),
         hotkey_select: Arc::new(Mutex::new(hk_select)),
         hotkey_stop: Arc::new(Mutex::new(hk_stop)),
         tts_child: Arc::new(Mutex::new(None)),
-        last_region: Arc::new(Mutex::new(None)),
+        last_region: Arc::new(Mutex::new(saved_region)),
         display,
+        test_hotkey_armed: Arc::new(AtomicBool::new(false)),
     };
 
     app.manage(state);

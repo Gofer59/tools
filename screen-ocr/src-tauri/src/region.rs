@@ -13,7 +13,6 @@ pub struct Region {
     pub h: u32,
 }
 
-#[allow(dead_code)]
 pub fn load(path: &Path) -> Result<Region> {
     let contents = std::fs::read_to_string(path)
         .with_context(|| format!("No saved region at {:?}", path))?;
@@ -22,7 +21,6 @@ pub fn load(path: &Path) -> Result<Region> {
     Ok(region)
 }
 
-#[allow(dead_code)]
 pub fn save(path: &Path, r: &Region) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)

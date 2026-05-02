@@ -1,6 +1,22 @@
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+pub fn region_path() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.join(".local").join("share").join("screen-ocr").join("last_region.json")
+}
+
+pub fn tts_wrapper_script(_app: &AppHandle) -> PathBuf {
+    // 1. Environment override
+    if let Ok(p) = std::env::var("SCREEN_OCR_TTS_WRAPPER") {
+        return PathBuf::from(p);
+    }
+
+    // 2. ~/.local/bin/tts_speak_wrapper.sh (installed by voice-speak install.sh)
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.join(".local").join("bin").join("tts_speak_wrapper.sh")
+}
+
 pub fn wrapper_script(app: &AppHandle) -> PathBuf {
     // 1. Environment override
     if let Ok(p) = std::env::var("SCREEN_OCR_WRAPPER") {

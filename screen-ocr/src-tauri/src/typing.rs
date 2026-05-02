@@ -34,9 +34,10 @@ pub fn type_text(text: &str, display: DisplayServer) -> Result<()> {
         DisplayServer::Windows => {
             #[cfg(target_os = "windows")]
             {
-                use enigo::{Enigo, KeyboardControllable};
-                let mut enigo = Enigo::new();
-                enigo.key_sequence(text);
+                use enigo::{Enigo, Keyboard, Settings};
+                let mut enigo = Enigo::new(&Settings::default())
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                enigo.text(text).map_err(|e| anyhow::anyhow!("{e}"))?;
                 Ok(())
             }
             #[cfg(not(target_os = "windows"))]

@@ -36,7 +36,8 @@ pub async fn run(app: AppHandle, mode: Mode) {
 
     // Determine region: for Quick, use last_region or fall back to interactive;
     // for Select, always do interactive.
-    let region_result = match mode {
+    // `newly_selected` tracks whether the user just drew a region (needs disk save).
+    let (region_result, newly_selected) = match mode {
         Mode::Quick => {
             let last = *state.last_region.lock().await;
             match last {
@@ -45,23 +46,25 @@ pub async fn run(app: AppHandle, mode: Mode) {
                         "[screen-ocr] Quick capture: {}x{}+{}+{}",
                         r.w, r.h, r.x, r.y
                     );
-                    Ok(r)
+                    (Ok(r), false)
                 }
                 None => {
                     eprintln!("[screen-ocr] No saved region — select one now…");
                     let disp = display;
-                    tauri::async_runtime::spawn_blocking(move || region::select(disp))
+                    let result = tauri::async_runtime::spawn_blocking(move || region::select(disp))
                         .await
-                        .unwrap_or_else(|e| Err(anyhow::anyhow!("join error: {e}")))
+                        .unwrap_or_else(|e| Err(anyhow::anyhow!("join error: {e}")));
+                    (result, true)
                 }
             }
         }
         Mode::Select => {
             eprintln!("[screen-ocr] Select a screen region…");
             let disp = display;
-            tauri::async_runtime::spawn_blocking(move || region::select(disp))
+            let result = tauri::async_runtime::spawn_blocking(move || region::select(disp))
                 .await
-                .unwrap_or_else(|e| Err(anyhow::anyhow!("join error: {e}")))
+                .unwrap_or_else(|e| Err(anyhow::anyhow!("join error: {e}")));
+            (result, true)
         }
     };
 
@@ -73,8 +76,13 @@ pub async fn run(app: AppHandle, mode: Mode) {
         }
     };
 
-    // Save the region for future Quick captures.
+    // Update in-memory region and persist to disk when freshly selected.
     *state.last_region.lock().await = Some(selected_region);
+    if newly_selected {
+        if let Err(e) = region::save(&crate::paths::region_path(), &selected_region) {
+            eprintln!("[screen-ocr] Could not save region to disk: {e}");
+        }
+    }
     eprintln!(
         "[screen-ocr] Region: {}x{}+{}+{}",
         selected_region.w, selected_region.h, selected_region.x, selected_region.y
@@ -144,12 +152,7 @@ pub async fn run(app: AppHandle, mode: Mode) {
     }
 
     // TTS (non-blocking).
-    let wrapper = crate::paths::wrapper_script(&app);
-    // Use tts_speak_wrapper.sh from voice-speak install, falling back to home dir.
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let tts_wrapper = home.join(".local").join("bin").join("tts_speak_wrapper.sh");
-
-    let _ = wrapper; // wrapper_script gives OCR script; TTS uses tts_speak_wrapper
+    let tts_wrapper = crate::paths::tts_wrapper_script(&app);
     {
         let mut tts_guard = state.tts_child.lock().await;
         // Kill previous TTS if still running.
