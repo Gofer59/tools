@@ -216,7 +216,7 @@ cd "$SCRIPT_DIR"
 
 npm --prefix ui install
 npm --prefix ui run build
-cargo tauri build --manifest-path src-tauri/Cargo.toml
+cargo tauri build
 
 echo "  ✓ Build complete"
 
