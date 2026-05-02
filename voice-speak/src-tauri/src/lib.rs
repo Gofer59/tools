@@ -174,6 +174,8 @@ pub fn run() {
             commands::models::cancel_download,
             commands::models::add_custom_model,
             commands::models::delete_local_model,
+            commands::hotkey::test_hotkey,
+            commands::hotkey::preview_voice,
         ])
         .run(tauri::generate_context!())
         .expect("tauri run failed");

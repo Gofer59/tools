@@ -103,6 +103,102 @@ fn rdev_key_name(key: &rdev::Key) -> &'static str {
     }
 }
 
+/// Spawn a one-shot rdev listener that captures the next key combination and
+/// emits `hotkey-triggered` with `{captured: "Mod+Mod+Key"}`.
+pub fn spawn_capture_thread(app: AppHandle, armed: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        use rdev::{listen, EventType};
+        use std::collections::HashSet;
+        use std::sync::Mutex;
+
+        let held: Arc<Mutex<HashSet<rdev::Key>>> = Arc::new(Mutex::new(HashSet::new()));
+        let done = Arc::new(AtomicBool::new(false));
+
+        let held2 = held.clone();
+        let done2 = done.clone();
+        let armed2 = armed.clone();
+        let app2 = app.clone();
+
+        let _ = listen(move |ev| {
+            if done2.load(Ordering::SeqCst) || !armed2.load(Ordering::SeqCst) {
+                return;
+            }
+            match ev.event_type {
+                EventType::KeyPress(key) => {
+                    held2.lock().unwrap().insert(key);
+                }
+                EventType::KeyRelease(_key) => {
+                    let snapshot = held2.lock().unwrap().clone();
+                    let combo = format_key_combo(&snapshot);
+                    if combo.is_empty() { return; }
+                    done2.store(true, Ordering::SeqCst);
+                    armed2.store(false, Ordering::SeqCst);
+                    let _ = app2.emit(
+                        "hotkey-triggered",
+                        serde_json::json!({
+                            "tool": "voice-speak",
+                            "state": "captured",
+                            "captured": combo,
+                        }),
+                    );
+                }
+                _ => {}
+            }
+        });
+    });
+}
+
+fn format_key_combo(held: &std::collections::HashSet<rdev::Key>) -> String {
+    use rdev::Key;
+    let mut has_ctrl = false; let mut has_alt = false;
+    let mut has_shift = false; let mut has_super = false;
+    let mut main: Option<&'static str> = None;
+    for key in held {
+        match key {
+            Key::ControlLeft | Key::ControlRight => has_ctrl = true,
+            Key::Alt | Key::AltGr              => has_alt = true,
+            Key::ShiftLeft | Key::ShiftRight   => has_shift = true,
+            Key::MetaLeft | Key::MetaRight     => has_super = true,
+            _ => { if main.is_none() { main = rdev_key_to_accel(key); } }
+        }
+    }
+    let key_str = match main { Some(k) => k, None => return String::new() };
+    let mut parts: Vec<&str> = Vec::new();
+    if has_ctrl  { parts.push("Ctrl"); }
+    if has_alt   { parts.push("Alt"); }
+    if has_shift { parts.push("Shift"); }
+    if has_super { parts.push("Super"); }
+    parts.push(key_str);
+    parts.join("+")
+}
+
+fn rdev_key_to_accel(key: &rdev::Key) -> Option<&'static str> {
+    use rdev::Key;
+    Some(match key {
+        Key::Space => "Space", Key::Return => "Return", Key::Escape => "Escape",
+        Key::Tab => "Tab", Key::Backspace => "Backspace", Key::Delete => "Delete",
+        Key::F1 => "F1", Key::F2 => "F2", Key::F3 => "F3", Key::F4 => "F4",
+        Key::F5 => "F5", Key::F6 => "F6", Key::F7 => "F7", Key::F8 => "F8",
+        Key::F9 => "F9", Key::F10 => "F10", Key::F11 => "F11", Key::F12 => "F12",
+        Key::UpArrow => "Up", Key::DownArrow => "Down",
+        Key::LeftArrow => "Left", Key::RightArrow => "Right",
+        Key::Home => "Home", Key::End => "End",
+        Key::PageUp => "PageUp", Key::PageDown => "PageDown",
+        Key::KeyA => "A", Key::KeyB => "B", Key::KeyC => "C", Key::KeyD => "D",
+        Key::KeyE => "E", Key::KeyF => "F", Key::KeyG => "G", Key::KeyH => "H",
+        Key::KeyI => "I", Key::KeyJ => "J", Key::KeyK => "K", Key::KeyL => "L",
+        Key::KeyM => "M", Key::KeyN => "N", Key::KeyO => "O", Key::KeyP => "P",
+        Key::KeyQ => "Q", Key::KeyR => "R", Key::KeyS => "S", Key::KeyT => "T",
+        Key::KeyU => "U", Key::KeyV => "V", Key::KeyW => "W", Key::KeyX => "X",
+        Key::KeyY => "Y", Key::KeyZ => "Z",
+        Key::Num0 => "Num0", Key::Num1 => "Num1", Key::Num2 => "Num2",
+        Key::Num3 => "Num3", Key::Num4 => "Num4", Key::Num5 => "Num5",
+        Key::Num6 => "Num6", Key::Num7 => "Num7", Key::Num8 => "Num8",
+        Key::Num9 => "Num9",
+        _ => return None,
+    })
+}
+
 fn rdev_fallback_loop(app: AppHandle, accelerator: String, stop: Arc<AtomicBool>) {
     let target_keys = parse_accelerator(&accelerator);
     let held: Arc<std::sync::Mutex<std::collections::HashSet<String>>> =

@@ -21,7 +21,7 @@ pub async fn list_local_models(app: AppHandle) -> Result<Vec<LocalModel>, String
     let mut out = vec![];
 
     for m in PIPER_VOICES {
-        let onnx = dir.join("models").join(&format!("{}.onnx", m.id));
+        let onnx = dir.join("models").join(format!("{}.onnx", m.id));
         if onnx.exists() {
             out.push(LocalModel {
                 id: m.id.into(),

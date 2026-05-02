@@ -18,6 +18,8 @@
   let voiceCatalog = $state<ModelEntry[]>([]);
   let localModels = $state<LocalModel[]>([]);
   let langFilter = $state('all');
+  let previewPlaying = $state(false);
+  let previewError = $state<string | null>(null);
 
   let unlistenConfig: (() => void) | null = null;
   let unlistenHotkey: (() => void) | null = null;
@@ -30,6 +32,7 @@
   );
   let selectedModel = $derived(voiceCatalog.find((m) => m.id === local.voice) ?? null);
   let needsDownload = $derived(selectedModel !== null && !installedIds.has(local.voice));
+  let previewText = $derived(getPreviewText(selectedModel?.language ?? ''));
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -134,12 +137,27 @@
     input.click();
   }
 
+  function getPreviewText(lang: string): string {
+    if (lang.startsWith('fr')) return "Bonjour ! Comment sonne cette voix ? Le vif renard brun saute par-dessus le chien paresseux.";
+    if (lang.startsWith('de')) return "Hallo! Wie klingt diese Stimme? Der schnelle braune Fuchs springt über den faulen Hund.";
+    if (lang.startsWith('es')) return "¡Hola! ¿Cómo suena esta voz? El rápido zorro marrón salta sobre el perro perezoso.";
+    if (lang.startsWith('pt')) return "Olá! Como soa esta voz? O rápido raposo marrom pula sobre o cão preguiçoso.";
+    if (lang.startsWith('it')) return "Ciao! Come suona questa voce? La volpe marrone veloce salta sopra il cane pigro.";
+    if (lang.startsWith('nl')) return "Hallo! Hoe klinkt deze stem? De snelle bruine vos springt over de luie hond.";
+    return "Hello! How does this voice sound? The quick brown fox jumps over the lazy dog.";
+  }
+
   async function previewVoice() {
+    if (previewPlaying || needsDownload) return;
+    previewPlaying = true;
+    previewError = null;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('preview_voice', { text: 'The quick brown fox.' });
-    } catch (e) {
-      console.log('preview_voice not yet wired', e);
+      await invoke('preview_voice', { text: previewText });
+    } catch (e: unknown) {
+      previewError = e instanceof Error ? e.message : String(e);
+    } finally {
+      previewPlaying = false;
     }
   }
 
@@ -302,12 +320,21 @@
   <!-- Test voice -->
   <div class={card}>
     <p class={sectionLabel}>{t('test_voice')}</p>
-    <button
-      onclick={previewVoice}
-      class="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-    >
-      {t('play')}
-    </button>
+    <p class="text-xs text-gray-500 dark:text-gray-400 italic leading-relaxed">"{previewText}"</p>
+    {#if needsDownload}
+      <p class="text-xs text-amber-600 dark:text-amber-400">Download the selected voice first.</p>
+    {:else}
+      <button
+        onclick={previewVoice}
+        disabled={previewPlaying}
+        class="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+      >
+        {previewPlaying ? 'Playing…' : t('play')}
+      </button>
+    {/if}
+    {#if previewError}
+      <p class="text-xs text-red-600 dark:text-red-400 mt-1">{previewError}</p>
+    {/if}
   </div>
 
   <!-- Status message -->

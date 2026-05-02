@@ -45,7 +45,7 @@ pub async fn update_config(
                 let cfg = state.config.read().await.clone();
                 let model_dir = dir.join("models");
                 let script = crate::paths::daemon_script(&app);
-                let _ = state.audio_tx.send(crate::AudioCmd::Stop);
+                let _ = state.audio_tx.send(crate::AudioCmd::Stop).await;
                 {
                     let mut d = state.daemon_ctrl.lock().await;
                     crate::piper::quit(&mut d).await;
