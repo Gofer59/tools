@@ -1,27 +1,40 @@
 # voice-prompt
 
-> Push-to-talk speech-to-text that types in any window. Whisper quality, 250 ms warm-start, configured live from a real GUI.
+> Push-to-talk speech-to-text that types in any window. Two-stage: a tiny model previews in ~300 ms, a large model replaces it with accurate output. Configured live from a real GUI.
 
-Hold a hotkey, speak, release — your words appear at the cursor. The Whisper daemon loads once at startup and stays resident, so every subsequent transcription is fast. All settings are changed live from a three-tab GUI; nothing requires a restart or a text editor.
+Hold a hotkey, speak, release — preview text appears at the cursor within ~300 ms (tiny model). A few seconds later the accurate large-model transcription replaces it cleanly. Both models run concurrently on the same audio capture. The preview can also appear in a floating overlay window instead of being typed inline, or disabled entirely for single-model behavior.
 
 ## Features
 
-- Push-to-talk hotkey (fully configurable)
+- **Two-stage transcription:** tiny model preview (~300 ms) + large model final replacement (~1-3 s)
+- **Three preview modes:** Inline Replace, Overlay Window, or None (single-model, current behavior)
+- **Per-model device selection:** run tiny on CPU, large on GPU independently
+- Push-to-talk hotkey (fully configurable; default Ctrl+Alt+Space)
 - Live-apply settings — changes take effect in under 1 second, no restart
 - 9-model Whisper catalog (tiny through large-v3) with streaming download
 - Custom `.onnx` model import
-- Persistent Python daemon — no cold-start latency after the first recording
-- Cross-platform: Linux X11 and Windows 10/11
+- Persistent Python daemons — no cold-start latency after the first recording
+- Cross-platform: Linux X11, Linux Wayland (requires `wtype`), Windows 10/11
+- French and English supported; auto-detect available
 - MIT licensed, no telemetry
 
 ## Platforms
 
-| Platform | Status |
-|---|---|
-| Linux X11 | Supported |
-| Linux Wayland | Partial — global hotkeys via rdev evdev fallback; requires user in `input` group |
-| Windows 10/11 | Supported |
-| macOS | Untested |
+| Platform | Status | Injection backend |
+|---|---|---|
+| Linux X11 | Supported | xdotool |
+| Linux Wayland | Supported | wtype (install required: `apt install wtype`) |
+| Windows 10/11 | Supported | enigo (SendInput) |
+| macOS | Untested | — |
+
+### Wayland prerequisites
+
+```bash
+apt install wtype   # Debian/Ubuntu
+pacman -S wtype     # Arch
+```
+
+If `wtype` is not installed, text injection will fail with a descriptive error. Switching to **Overlay Window** preview mode avoids injection during the preview phase.
 
 ## Quick install
 

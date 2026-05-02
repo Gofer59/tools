@@ -5502,7 +5502,6 @@ dependencies = [
  "enigo",
  "hound",
  "model-manager",
- "parking_lot",
  "rdev",
  "serde",
  "serde_json",

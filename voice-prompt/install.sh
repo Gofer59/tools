@@ -22,8 +22,10 @@ install_deps_apt() {
         libxdo-dev \
         python3 \
         python3-venv \
+        xdotool \
         xclip \
         wl-clipboard \
+        wtype \
         portaudio19-dev
 }
 
@@ -35,8 +37,10 @@ install_deps_dnf() {
         libayatana-appindicator-devel \
         libxdo-devel \
         python3 \
+        xdotool \
         xclip \
         wl-clipboard \
+        wtype \
         portaudio-devel
 }
 
@@ -47,7 +51,9 @@ install_deps_pacman() {
         openssl \
         python \
         xdotool \
+        xclip \
         wl-clipboard \
+        wtype \
         portaudio
 }
 
@@ -132,6 +138,30 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$BIN"; then
     echo "[!] NOTE: $BIN is not in your PATH."
     echo "    Add the following line to your ~/.bashrc or ~/.zshrc:"
     echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Add user to `input` group (Linux only) — required for live preview.
+# ---------------------------------------------------------------------------
+# voice-prompt prefers `rdev` (kernel evdev) for hotkey detection because it
+# does NOT see synthetic xdotool events. Without it (XGrabKey via tauri-plugin)
+# any xdotool injection during PTT hold causes a fork-bomb crash. evdev needs
+# read access to /dev/input/event* which is gated by the `input` group on Linux.
+if [[ "$(uname -s)" == "Linux" && -n "${USER:-}" ]]; then
+    if ! id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qx "input"; then
+        echo ""
+        echo "[*] Adding $USER to the 'input' group (needed for live in-target-window preview)..."
+        if sudo usermod -aG input "$USER"; then
+            echo "[+] Done. You MUST log out and back in (or reboot) for this to take effect."
+            echo "    Until then voice-prompt falls back to final-only injection."
+        else
+            echo "[!] Could not add to 'input' group. Run manually:"
+            echo "      sudo usermod -aG input \$USER"
+            echo "    Then log out and back in. Without this, live preview stays disabled."
+        fi
+    else
+        echo "[+] $USER already in 'input' group — live preview will be enabled."
+    fi
 fi
 
 echo ""

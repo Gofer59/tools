@@ -40,33 +40,44 @@ pub async fn update_config(
                 *h = crate::hotkey::register(&app, value.as_str().unwrap_or("Ctrl+Alt+Space"))
                     .map_err(|e| e.to_string())?;
             }
+
+            // Large daemon restart triggers.
             "whisper_model" | "compute_type" | "python_bin" => {
-                let mut d = state.daemon_ctrl.lock().await;
-                crate::whisper::quit(&mut d).await;
-                let cfg = state.config.read().await.clone();
-                let model_dir = dir.join("models");
-                let script = crate::paths::daemon_script(&app);
-                *d = crate::whisper::spawn(
-                    &cfg.python_bin,
-                    &script,
-                    &cfg.whisper_model,
-                    &cfg.compute_type,
-                    &model_dir,
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-                let _ = app.emit(
-                    "daemon-ready",
-                    serde_json::json!({"model": cfg.whisper_model}),
-                );
+                restart_large_daemon(&app, &state, &new_cfg, &dir).await?;
             }
+
             _ => {}
         }
+
         let _ = app.emit(
             "config-applied",
             serde_json::json!({"field": field, "value": value}),
         );
     }
 
+    Ok(())
+}
+
+async fn restart_large_daemon(
+    app: &AppHandle,
+    state: &AppState,
+    cfg: &Config,
+    dir: &std::path::Path,
+) -> Result<(), String> {
+    let mut d = state.daemon_ctrl.lock().await;
+    crate::whisper::quit(&mut d).await;
+    let script = crate::paths::daemon_script(app);
+    let model_dir = dir.join("models");
+    *d = crate::whisper::spawn(
+        &cfg.python_bin,
+        &script,
+        &cfg.whisper_model,
+        &cfg.compute_type,
+        &model_dir,
+        "cpu",
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    let _ = app.emit("daemon-ready", serde_json::json!({"model": cfg.whisper_model}));
     Ok(())
 }
