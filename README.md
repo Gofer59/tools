@@ -16,6 +16,7 @@ A collection of open-source desktop utilities for OCR, text-to-speech, screen ca
 | [book-reader](android/book-reader/) | OCR + TTS book reader app | Android |
 | [media-compress](linux/media-compress/) | Video/image/audio compression scripts | Linux |
 | [key-detect](linux/key-detect/) | Key code detection utility | Linux |
+| [math-speak](math-speak/) | Hotkey TTS for math text — LaTeX, Unicode, PDF (Piper + SRE + Ollama fallback) | Linux |
 
 ## Platforms
 

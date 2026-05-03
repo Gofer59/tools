@@ -1,0 +1,14 @@
+{
+  "name": "math-speak-sre",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Long-lived Speech Rule Engine daemon for math-speak",
+  "main": "sre_daemon.js",
+  "scripts": {
+    "start": "node sre_daemon.js"
+  },
+  "dependencies": {
+    "speech-rule-engine": "^4.0.7",
+    "temml": "^0.10.30"
+  }
+}
