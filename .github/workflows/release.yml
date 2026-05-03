@@ -53,6 +53,12 @@ jobs:
           key: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', steps.parse.outputs.src_dir)) }}
           restore-keys: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-
 
+      - name: Install system deps (x86_64 only)
+        if: "!matrix.use_cross"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libwayland-dev libasound2-dev
+
       - name: Install cross
         if: matrix.use_cross
         uses: taiki-e/install-action@v2
