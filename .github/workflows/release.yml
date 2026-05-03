@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    tags: ['*-v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+          - arch: aarch64
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG##*-v}"
+          TOOL="${TAG%-v*}"
+          case "$TOOL" in
+            deck-reader) SRC_DIR="steamdeck/deck-reader" ;;
+            *)           SRC_DIR="linux/$TOOL" ;;
+          esac
+          echo "tool=$TOOL"       >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "src_dir=$SRC_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ steps.parse.outputs.src_dir }}/target
+          key: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', steps.parse.outputs.src_dir)) }}
+          restore-keys: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        working-directory: ${{ steps.parse.outputs.src_dir }}
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: ${{ steps.parse.outputs.src_dir }}/target/${{ matrix.target }}/release/${{ steps.parse.outputs.tool }}
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG##*-v}"
+          TOOL="${TAG%-v*}"
+          case "$TOOL" in
+            deck-reader) SRC_DIR="steamdeck/deck-reader" ;;
+            *)           SRC_DIR="linux/$TOOL" ;;
+          esac
+          echo "tool=$TOOL"       >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "src_dir=$SRC_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Assemble tarballs
+        run: |
+          TOOL="${{ steps.parse.outputs.tool }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+          SRC="${{ steps.parse.outputs.src_dir }}"
+
+          for ARCH in x86_64 aarch64; do
+            DIR="${TOOL}-${VERSION}"
+            mkdir -p "$DIR"
+
+            # Binary (named <tool>-<arch> in tarball)
+            cp "artifacts/binary-${ARCH}/${TOOL}" "${DIR}/${TOOL}-${ARCH}"
+            chmod +x "${DIR}/${TOOL}-${ARCH}"
+
+            # install-release.sh → install.sh
+            cp "${SRC}/install-release.sh" "${DIR}/install.sh"
+            chmod +x "${DIR}/install.sh"
+
+            # config.toml (if present)
+            [ -f "${SRC}/config.toml" ] && cp "${SRC}/config.toml" "${DIR}/config.toml"
+
+            # python/ dir: copy python/ subdir, or tts_speak.py at root (voice-speak)
+            if [ -d "${SRC}/python" ]; then
+              cp -r "${SRC}/python" "${DIR}/python"
+            elif [ -f "${SRC}/tts_speak.py" ]; then
+              mkdir -p "${DIR}/python"
+              cp "${SRC}/tts_speak.py" "${DIR}/python/"
+              [ -f "${SRC}/requirements.txt" ] && cp "${SRC}/requirements.txt" "${DIR}/python/"
+            fi
+
+            # README
+            cp "${SRC}/README.md" "${DIR}/README.md"
+
+            tar czf "${TOOL}-${VERSION}-${ARCH}-linux.tar.gz" "${DIR}/"
+            rm -rf "${DIR}"
+          done
+
+      - name: Build release notes
+        run: |
+          TOOL="${{ steps.parse.outputs.tool }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+          SRC="${{ steps.parse.outputs.src_dir }}"
+
+          # First non-heading paragraph from README
+          DESC=$(awk '/^## /{exit} /^# [^#]/{found=1; next} found && /^[^[:space:]]/{print; exit}' "${SRC}/README.md")
+
+          cat > release_body.md <<NOTES
+          ## ${TOOL} v${VERSION}
+
+          ${DESC}
+
+          ## Install
+
+          \`\`\`bash
+          ARCH=\$(uname -m)
+          curl -LO https://github.com/Gofer59/tools/releases/download/${TOOL}-v${VERSION}/${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz
+          tar xzf ${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz
+          cd ${TOOL}-${VERSION}
+          bash install.sh
+          \`\`\`
+          NOTES
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TOOL="${{ steps.parse.outputs.tool }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${TOOL} v${VERSION}" \
+            --notes-file release_body.md \
+            "${TOOL}-${VERSION}-x86_64-linux.tar.gz" \
+            "${TOOL}-${VERSION}-aarch64-linux.tar.gz"
