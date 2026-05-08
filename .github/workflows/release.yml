@@ -3,7 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - '*-v*.*.*'
+      - 'voice-prompt-v*.*.*'
+      - 'voice-speak-v*.*.*'
+      - 'screen-ocr-v*.*.*'
+      - 'threshold-filter-v*.*.*'
+      - 'deck-reader-v*.*.*'
+      - 'key-detect-v*.*.*'
 
 permissions:
   contents: write
