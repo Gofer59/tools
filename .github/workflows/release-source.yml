@@ -1,0 +1,113 @@
+name: Release (source)
+
+on:
+  push:
+    tags:
+      - 'book-digitize-v*.*.*'
+      - 'gamebook-digitize-v*.*.*'
+      - 'media-compress-v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Build source tarball + publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG##*-v}"
+          TOOL="${TAG%-v*}"
+          SRC="linux/${TOOL}"
+          if [ ! -d "$SRC" ]; then
+            echo "Source dir $SRC not found for tag $TAG" >&2
+            exit 1
+          fi
+          echo "tool=$TOOL"       >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "src=$SRC"         >> "$GITHUB_OUTPUT"
+
+      - name: Assemble tarball
+        env:
+          TOOL: ${{ steps.parse.outputs.tool }}
+          VERSION: ${{ steps.parse.outputs.version }}
+          SRC: ${{ steps.parse.outputs.src }}
+        run: |
+          DIR="${TOOL}-${VERSION}"
+
+          rsync -a \
+            --exclude='.venv/' \
+            --exclude='node_modules/' \
+            --exclude='build/' \
+            --exclude='dist/' \
+            --exclude='*.egg-info/' \
+            --exclude='__pycache__/' \
+            --exclude='.pytest_cache/' \
+            --exclude='.ruff_cache/' \
+            --exclude='*.pyc' \
+            --exclude='*.wav' \
+            --exclude='target/' \
+            "${SRC}/" "${DIR}/"
+
+          ARCHIVE="${TOOL}-${VERSION}.tar.gz"
+          tar czf "$ARCHIVE" "${DIR}/"
+          sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          rm -rf "$DIR"
+
+      - name: Build release notes
+        env:
+          TOOL: ${{ steps.parse.outputs.tool }}
+          VERSION: ${{ steps.parse.outputs.version }}
+          SRC: ${{ steps.parse.outputs.src }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          DESC=""
+          if [ -f "${SRC}/README.md" ]; then
+            DESC=$(awk '/^## /{exit} /^# [^#]/{found=1; next} found && /^[^[:space:]]/{print; exit}' "${SRC}/README.md")
+          fi
+
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+
+          {
+            echo "## ${TOOL} v${VERSION}"
+            echo
+            [ -n "$DESC" ] && { echo "$DESC"; echo; }
+            echo "## Install (Linux)"
+            echo
+            echo '```bash'
+            echo "curl -LO ${BASE_URL}/${TOOL}-${VERSION}.tar.gz"
+            echo "curl -LO ${BASE_URL}/${TOOL}-${VERSION}.tar.gz.sha256"
+            echo "sha256sum -c ${TOOL}-${VERSION}.tar.gz.sha256"
+            echo "tar xzf ${TOOL}-${VERSION}.tar.gz"
+            echo "cd ${TOOL}-${VERSION}"
+            echo 'bash install.sh'
+            echo '```'
+            echo
+            echo "## Verify checksum"
+            echo
+            echo '```bash'
+            echo "sha256sum -c ${TOOL}-${VERSION}.tar.gz.sha256"
+            echo '```'
+          } > release_body.md
+
+          echo "----- release notes -----"
+          cat release_body.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ steps.parse.outputs.tool }}
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${TOOL} v${VERSION}" \
+            --notes-file release_body.md \
+            "${TOOL}-${VERSION}.tar.gz" \
+            "${TOOL}-${VERSION}.tar.gz.sha256"

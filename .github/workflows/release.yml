@@ -4,41 +4,76 @@ on:
   push:
     tags:
       - '*-v*.*.*'
-      - '!math-speak-v*.*.*'
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.arch }}
+  setup:
+    name: Resolve build matrix
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            target: x86_64-unknown-linux-gnu
-            use_cross: false
-          - arch: aarch64
-            target: aarch64-unknown-linux-gnu
-            use_cross: true
-
+    outputs:
+      tool: ${{ steps.parse.outputs.tool }}
+      version: ${{ steps.parse.outputs.version }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_windows: ${{ steps.matrix.outputs.has_windows }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Parse tag
         id: parse
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG##*-v}"
           TOOL="${TAG%-v*}"
-          case "$TOOL" in
-            deck-reader) SRC_DIR="steamdeck/deck-reader" ;;
-            *)           SRC_DIR="linux/$TOOL" ;;
-          esac
           echo "tool=$TOOL"       >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "src_dir=$SRC_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Build matrix per tool
+        id: matrix
+        run: |
+          TOOL="${{ steps.parse.outputs.tool }}"
+          HAS_WINDOWS=false
+          case "$TOOL" in
+            threshold-filter)
+              HAS_WINDOWS=true
+              MATRIX='{"include":[
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/threshold-filter"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/threshold-filter"},
+                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/threshold-filter"}
+              ]}'
+              ;;
+            deck-reader)
+              HAS_WINDOWS=true
+              MATRIX='{"include":[
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"steamdeck/deck-reader"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"steamdeck/deck-reader"},
+                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/deck-reader"}
+              ]}'
+              ;;
+            voice-prompt|voice-speak|screen-ocr|key-detect)
+              MATRIX='{"include":[
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/'"$TOOL"'"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/'"$TOOL"'"}
+              ]}'
+              ;;
+            *)
+              echo "Unknown tool '$TOOL' — release.yml has no matrix for it." >&2
+              echo "Source-tarball releases (Python/shell) are handled by release-source.yml; APK by release-android.yml." >&2
+              exit 1
+              ;;
+          esac
+          MATRIX_COMPACT=$(echo "$MATRIX" | tr -d '\n' | tr -s ' ')
+          echo "matrix=$MATRIX_COMPACT" >> "$GITHUB_OUTPUT"
+          echo "has_windows=$HAS_WINDOWS" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.arch }}-${{ matrix.os }}
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -51,133 +86,201 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ${{ steps.parse.outputs.src_dir }}/target
-          key: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', steps.parse.outputs.src_dir)) }}
-          restore-keys: ${{ steps.parse.outputs.tool }}-${{ matrix.target }}-
+            ${{ matrix.src }}/target
+          key: ${{ needs.setup.outputs.tool }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.src)) }}
+          restore-keys: |
+            ${{ needs.setup.outputs.tool }}-${{ matrix.target }}-
 
-      - name: Install system deps (x86_64 only)
-        if: "!matrix.use_cross"
+      - name: Install Linux native system deps
+        if: matrix.os == 'ubuntu-latest' && matrix.use_cross == false
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libx11-dev libxtst-dev libxkbcommon-dev libwayland-dev libasound2-dev libdbus-1-dev
 
       - name: Install cross
-        if: matrix.use_cross
+        if: matrix.use_cross == true
         uses: taiki-e/install-action@v2
         with:
           tool: cross
 
-      - name: Build
-        working-directory: ${{ steps.parse.outputs.src_dir }}
+      - name: Build (cross)
+        if: matrix.use_cross == true
+        working-directory: ${{ matrix.src }}
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (native)
+        if: matrix.use_cross == false
+        working-directory: ${{ matrix.src }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Pack archive (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        env:
+          TOOL: ${{ needs.setup.outputs.tool }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          SRC: ${{ matrix.src }}
+          TARGET: ${{ matrix.target }}
         run: |
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
+          DIR="${TOOL}-${VERSION}"
+          mkdir -p "$DIR"
+
+          cp "${SRC}/target/${TARGET}/release/${TOOL}" "${DIR}/${TOOL}-${ARCH}"
+          chmod +x "${DIR}/${TOOL}-${ARCH}"
+
+          if [ -f "${SRC}/install-release.sh" ]; then
+            cp "${SRC}/install-release.sh" "${DIR}/install.sh"
+            chmod +x "${DIR}/install.sh"
           fi
 
-      - name: Upload binary
+          [ -f "${SRC}/config.toml" ] && cp "${SRC}/config.toml" "${DIR}/config.toml"
+
+          if [ -d "${SRC}/python" ]; then
+            cp -r "${SRC}/python" "${DIR}/python"
+          elif [ -f "${SRC}/tts_speak.py" ]; then
+            mkdir -p "${DIR}/python"
+            cp "${SRC}/tts_speak.py" "${DIR}/python/"
+            [ -f "${SRC}/requirements.txt" ] && cp "${SRC}/requirements.txt" "${DIR}/python/"
+          fi
+
+          [ -f "${SRC}/README.md" ] && cp "${SRC}/README.md" "${DIR}/README.md"
+
+          ARCHIVE="${TOOL}-${VERSION}-${ARCH}-linux.tar.gz"
+          tar czf "$ARCHIVE" "${DIR}/"
+          sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          rm -rf "$DIR"
+
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Pack archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          TOOL: ${{ needs.setup.outputs.tool }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          SRC: ${{ matrix.src }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $DIR = "$env:TOOL-$env:VERSION"
+          New-Item -ItemType Directory -Force -Path $DIR | Out-Null
+
+          Copy-Item "$env:SRC/target/$env:TARGET/release/$env:TOOL.exe" "$DIR/$env:TOOL.exe"
+
+          if (Test-Path "$env:SRC/config.toml") { Copy-Item "$env:SRC/config.toml" "$DIR/config.toml" }
+          if (Test-Path "$env:SRC/README.md")   { Copy-Item "$env:SRC/README.md"   "$DIR/README.md"   }
+
+          $ARCHIVE = "$env:TOOL-$env:VERSION-$env:ARCH-windows.zip"
+          Compress-Archive -Path "$DIR/*" -DestinationPath $ARCHIVE -Force
+          $hash = (Get-FileHash $ARCHIVE -Algorithm SHA256).Hash.ToLower()
+          "$hash  $ARCHIVE" | Out-File -FilePath "$ARCHIVE.sha256" -Encoding ascii -NoNewline
+          Remove-Item -Recurse -Force $DIR
+
+          "ARCHIVE=$ARCHIVE" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload archive + checksum
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.arch }}
-          path: ${{ steps.parse.outputs.src_dir }}/target/${{ matrix.target }}/release/${{ steps.parse.outputs.tool }}
+          name: archive-${{ matrix.arch }}-${{ matrix.os }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          if-no-files-found: error
 
   create-release:
-    needs: build
+    name: Publish GitHub release
+    needs: [setup, build]
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Parse tag
-        id: parse
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG##*-v}"
-          TOOL="${TAG%-v*}"
-          case "$TOOL" in
-            deck-reader) SRC_DIR="steamdeck/deck-reader" ;;
-            *)           SRC_DIR="linux/$TOOL" ;;
-          esac
-          echo "tool=$TOOL"       >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "src_dir=$SRC_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Download binaries
+      - name: Download all archives
         uses: actions/download-artifact@v4
         with:
-          path: artifacts/
+          path: dist/
+          pattern: archive-*
+          merge-multiple: true
 
-      - name: Assemble tarballs
-        run: |
-          TOOL="${{ steps.parse.outputs.tool }}"
-          VERSION="${{ steps.parse.outputs.version }}"
-          SRC="${{ steps.parse.outputs.src_dir }}"
-
-          for ARCH in x86_64 aarch64; do
-            DIR="${TOOL}-${VERSION}"
-            mkdir -p "$DIR"
-
-            # Binary (named <tool>-<arch> in tarball)
-            cp "artifacts/binary-${ARCH}/${TOOL}" "${DIR}/${TOOL}-${ARCH}"
-            chmod +x "${DIR}/${TOOL}-${ARCH}"
-
-            # install-release.sh → install.sh
-            cp "${SRC}/install-release.sh" "${DIR}/install.sh"
-            chmod +x "${DIR}/install.sh"
-
-            # config.toml (if present)
-            [ -f "${SRC}/config.toml" ] && cp "${SRC}/config.toml" "${DIR}/config.toml"
-
-            # python/ dir: copy python/ subdir, or tts_speak.py at root (voice-speak)
-            if [ -d "${SRC}/python" ]; then
-              cp -r "${SRC}/python" "${DIR}/python"
-            elif [ -f "${SRC}/tts_speak.py" ]; then
-              mkdir -p "${DIR}/python"
-              cp "${SRC}/tts_speak.py" "${DIR}/python/"
-              [ -f "${SRC}/requirements.txt" ] && cp "${SRC}/requirements.txt" "${DIR}/python/"
-            fi
-
-            # README
-            cp "${SRC}/README.md" "${DIR}/README.md"
-
-            tar czf "${TOOL}-${VERSION}-${ARCH}-linux.tar.gz" "${DIR}/"
-            rm -rf "${DIR}"
-          done
+      - name: List collected assets
+        run: ls -lah dist/
 
       - name: Build release notes
+        env:
+          TOOL: ${{ needs.setup.outputs.tool }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          HAS_WINDOWS: ${{ needs.setup.outputs.has_windows }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
-          TOOL="${{ steps.parse.outputs.tool }}"
-          VERSION="${{ steps.parse.outputs.version }}"
-          SRC="${{ steps.parse.outputs.src_dir }}"
+          case "$TOOL" in
+            deck-reader) SRC_README="steamdeck/deck-reader/README.md" ;;
+            *)           SRC_README="linux/${TOOL}/README.md" ;;
+          esac
 
-          # First non-heading paragraph from README
-          DESC=$(awk '/^## /{exit} /^# [^#]/{found=1; next} found && /^[^[:space:]]/{print; exit}' "${SRC}/README.md")
+          DESC=""
+          if [ -f "$SRC_README" ]; then
+            DESC=$(awk '/^## /{exit} /^# [^#]/{found=1; next} found && /^[^[:space:]]/{print; exit}' "$SRC_README")
+          fi
 
-          cat > release_body.md <<NOTES
-          ## ${TOOL} v${VERSION}
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
-          ${DESC}
+          {
+            echo "## ${TOOL} v${VERSION}"
+            echo
+            [ -n "$DESC" ] && { echo "$DESC"; echo; }
+            echo "## Install"
+            echo
+            echo "### Linux (x86_64 / aarch64)"
+            echo
+            echo '```bash'
+            echo 'ARCH=$(uname -m)'
+            echo "curl -LO ${BASE_URL}/${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz"
+            echo "curl -LO ${BASE_URL}/${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz.sha256"
+            echo "sha256sum -c ${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz.sha256"
+            echo "tar xzf ${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz"
+            echo "cd ${TOOL}-${VERSION}"
+            echo 'bash install.sh'
+            echo '```'
+            if [ "$HAS_WINDOWS" = "true" ]; then
+              echo
+              echo "### Windows (x86_64)"
+              echo
+              echo '```powershell'
+              echo "Invoke-WebRequest -Uri ${BASE_URL}/${TOOL}-${VERSION}-x86_64-windows.zip -OutFile ${TOOL}.zip"
+              echo "Invoke-WebRequest -Uri ${BASE_URL}/${TOOL}-${VERSION}-x86_64-windows.zip.sha256 -OutFile ${TOOL}.zip.sha256"
+              echo '$expected = (Get-Content '"${TOOL}"'.zip.sha256).Split(" ")[0]'
+              echo '$actual = (Get-FileHash '"${TOOL}"'.zip -Algorithm SHA256).Hash.ToLower()'
+              echo 'if ($expected -ne $actual) { throw "checksum mismatch" }'
+              echo "Expand-Archive ${TOOL}.zip -DestinationPath ${TOOL}-${VERSION} -Force"
+              echo "cd ${TOOL}-${VERSION}"
+              echo "./${TOOL}.exe"
+              echo '```'
+            fi
+            echo
+            echo "## Verify checksums"
+            echo
+            echo "Each archive ships with a matching \`.sha256\` file."
+            echo
+            echo '```bash'
+            echo "sha256sum -c ${TOOL}-${VERSION}-x86_64-linux.tar.gz.sha256   # Linux/macOS"
+            echo '```'
+            echo
+            echo '```powershell'
+            echo "Get-FileHash ${TOOL}-${VERSION}-x86_64-windows.zip -Algorithm SHA256   # Windows"
+            echo '```'
+          } > release_body.md
 
-          ## Install
-
-          \`\`\`bash
-          ARCH=\$(uname -m)
-          curl -LO https://github.com/Gofer59/tools/releases/download/${TOOL}-v${VERSION}/${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz
-          tar xzf ${TOOL}-${VERSION}-\${ARCH}-linux.tar.gz
-          cd ${TOOL}-${VERSION}
-          bash install.sh
-          \`\`\`
-          NOTES
+          echo "----- release notes -----"
+          cat release_body.md
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ needs.setup.outputs.tool }}
+          VERSION: ${{ needs.setup.outputs.version }}
         run: |
-          TOOL="${{ steps.parse.outputs.tool }}"
-          VERSION="${{ steps.parse.outputs.version }}"
           gh release create "${GITHUB_REF_NAME}" \
             --title "${TOOL} v${VERSION}" \
             --notes-file release_body.md \
-            "${TOOL}-${VERSION}-x86_64-linux.tar.gz" \
-            "${TOOL}-${VERSION}-aarch64-linux.tar.gz"
+            dist/*

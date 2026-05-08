@@ -4,6 +4,33 @@ Live screen threshold filter for OCR preprocessing. Click on an app window, then
 
 Works on both **Linux (X11)** and **Windows**.
 
+## Install
+
+### Linux (x86_64 / aarch64)
+
+```bash
+ARCH=$(uname -m)
+curl -LO https://github.com/Gofer59/tools/releases/latest/download/threshold-filter-${ARCH}-linux.tar.gz
+curl -LO https://github.com/Gofer59/tools/releases/latest/download/threshold-filter-${ARCH}-linux.tar.gz.sha256
+sha256sum -c threshold-filter-${ARCH}-linux.tar.gz.sha256
+tar xzf threshold-filter-${ARCH}-linux.tar.gz
+cd threshold-filter-*
+bash install.sh
+```
+
+> Each release page replaces `latest` with the actual version, e.g. `threshold-filter-v1.0.1`.
+
+### Windows (x86_64)
+
+```powershell
+Invoke-WebRequest -Uri https://github.com/Gofer59/tools/releases/latest/download/threshold-filter-x86_64-windows.zip -OutFile threshold-filter.zip
+Expand-Archive threshold-filter.zip -DestinationPath threshold-filter -Force
+cd threshold-filter
+./threshold-filter.exe
+```
+
+To build from source instead, see the `Build` section below.
+
 ## Build
 
 Requires the Rust toolchain (`cargo`).
