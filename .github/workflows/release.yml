@@ -7,6 +7,7 @@ on:
       - 'voice-speak-v*.*.*'
       - 'screen-ocr-v*.*.*'
       - 'threshold-filter-v*.*.*'
+      - 'steamdeck-threshold-filter-v*.*.*'
       - 'deck-reader-v*.*.*'
       - 'key-detect-v*.*.*'
 
@@ -41,23 +42,29 @@ jobs:
             threshold-filter)
               HAS_WINDOWS=true
               MATRIX='{"include":[
-                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/threshold-filter"},
-                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/threshold-filter"},
-                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/threshold-filter"}
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/threshold-filter","bin":"threshold-filter"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/threshold-filter","bin":"threshold-filter"},
+                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/threshold-filter","bin":"threshold-filter"}
+              ]}'
+              ;;
+            steamdeck-threshold-filter)
+              MATRIX='{"include":[
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"steamdeck/threshold-filter","bin":"threshold-filter-deck"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"steamdeck/threshold-filter","bin":"threshold-filter-deck"}
               ]}'
               ;;
             deck-reader)
               HAS_WINDOWS=true
               MATRIX='{"include":[
-                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"steamdeck/deck-reader"},
-                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"steamdeck/deck-reader"},
-                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/deck-reader"}
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"steamdeck/deck-reader","bin":"deck-reader"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"steamdeck/deck-reader","bin":"deck-reader"},
+                {"os":"windows-latest","arch":"x86_64","target":"x86_64-pc-windows-msvc","ext":"zip","use_cross":false,"src":"windows/deck-reader","bin":"deck-reader"}
               ]}'
               ;;
             voice-prompt|voice-speak|screen-ocr|key-detect)
               MATRIX='{"include":[
-                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/'"$TOOL"'"},
-                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/'"$TOOL"'"}
+                {"os":"ubuntu-latest","arch":"x86_64","target":"x86_64-unknown-linux-gnu","ext":"tar.gz","use_cross":false,"src":"linux/'"$TOOL"'","bin":"'"$TOOL"'"},
+                {"os":"ubuntu-latest","arch":"aarch64","target":"aarch64-unknown-linux-gnu","ext":"tar.gz","use_cross":true,"src":"linux/'"$TOOL"'","bin":"'"$TOOL"'"}
               ]}'
               ;;
             *)
@@ -127,11 +134,12 @@ jobs:
           ARCH: ${{ matrix.arch }}
           SRC: ${{ matrix.src }}
           TARGET: ${{ matrix.target }}
+          BIN: ${{ matrix.bin }}
         run: |
           DIR="${TOOL}-${VERSION}"
           mkdir -p "$DIR"
 
-          cp "${SRC}/target/${TARGET}/release/${TOOL}" "${DIR}/${TOOL}-${ARCH}"
+          cp "${SRC}/target/${TARGET}/release/${BIN}" "${DIR}/${TOOL}-${ARCH}"
           chmod +x "${DIR}/${TOOL}-${ARCH}"
 
           if [ -f "${SRC}/install-release.sh" ]; then
@@ -167,11 +175,12 @@ jobs:
           ARCH: ${{ matrix.arch }}
           SRC: ${{ matrix.src }}
           TARGET: ${{ matrix.target }}
+          BIN: ${{ matrix.bin }}
         run: |
           $DIR = "$env:TOOL-$env:VERSION"
           New-Item -ItemType Directory -Force -Path $DIR | Out-Null
 
-          Copy-Item "$env:SRC/target/$env:TARGET/release/$env:TOOL.exe" "$DIR/$env:TOOL.exe"
+          Copy-Item "$env:SRC/target/$env:TARGET/release/$env:BIN.exe" "$DIR/$env:TOOL.exe"
 
           if (Test-Path "$env:SRC/config.toml") { Copy-Item "$env:SRC/config.toml" "$DIR/config.toml" }
           if (Test-Path "$env:SRC/README.md")   { Copy-Item "$env:SRC/README.md"   "$DIR/README.md"   }
@@ -219,8 +228,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           case "$TOOL" in
-            deck-reader) SRC_README="steamdeck/deck-reader/README.md" ;;
-            *)           SRC_README="linux/${TOOL}/README.md" ;;
+            deck-reader)                 SRC_README="steamdeck/deck-reader/README.md" ;;
+            steamdeck-threshold-filter)  SRC_README="steamdeck/threshold-filter/README.md" ;;
+            *)                           SRC_README="linux/${TOOL}/README.md" ;;
           esac
 
           DESC=""
