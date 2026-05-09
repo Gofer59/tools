@@ -19,6 +19,10 @@ pub struct ThresholdApp {
     always_on_top: bool,
     panel_collapsed: bool,
     panel_width: f32,
+    bg_replace_enabled: bool,
+    fg_replace_enabled: bool,
+    bg_color: [u8; 3],
+    fg_color: [u8; 3],
 
     // Capture state
     display: DisplayServer,
@@ -38,6 +42,10 @@ pub struct ThresholdApp {
     texture_dirty: bool,
     prev_threshold: u8,
     prev_invert: bool,
+    prev_bg_replace_enabled: bool,
+    prev_fg_replace_enabled: bool,
+    prev_bg_color: [u8; 3],
+    prev_fg_color: [u8; 3],
 
     // Status
     error_msg: Option<String>,
@@ -68,6 +76,8 @@ impl ThresholdApp {
         invert: bool,
         always_on_top: bool,
         panel_width: f32,
+        bg_color: [u8; 3],
+        fg_color: [u8; 3],
     ) -> Self {
         let region = capture::load_region(&region_file).ok();
         let window_id = Self::get_own_window_id(cc);
@@ -87,6 +97,10 @@ impl ThresholdApp {
             always_on_top,
             panel_collapsed: false,
             panel_width,
+            bg_replace_enabled: false,
+            fg_replace_enabled: false,
+            bg_color,
+            fg_color,
             display,
             target_window_id: None,
             target_crop: None,
@@ -100,6 +114,10 @@ impl ThresholdApp {
             texture_dirty: false,
             prev_threshold: default_threshold,
             prev_invert: invert,
+            prev_bg_replace_enabled: false,
+            prev_fg_replace_enabled: false,
+            prev_bg_color: bg_color,
+            prev_fg_color: fg_color,
             error_msg: None,
             status_msg: Some(status),
             window_id,
@@ -217,10 +235,20 @@ impl ThresholdApp {
     }
 
     fn update_texture(&mut self, ctx: &egui::Context) {
-        if self.threshold != self.prev_threshold || self.invert != self.prev_invert {
+        if self.threshold != self.prev_threshold
+            || self.invert != self.prev_invert
+            || self.bg_replace_enabled != self.prev_bg_replace_enabled
+            || self.fg_replace_enabled != self.prev_fg_replace_enabled
+            || self.bg_color != self.prev_bg_color
+            || self.fg_color != self.prev_fg_color
+        {
             self.texture_dirty = true;
             self.prev_threshold = self.threshold;
             self.prev_invert = self.invert;
+            self.prev_bg_replace_enabled = self.bg_replace_enabled;
+            self.prev_fg_replace_enabled = self.fg_replace_enabled;
+            self.prev_bg_color = self.bg_color;
+            self.prev_fg_color = self.fg_color;
         }
 
         if !self.texture_dirty {
@@ -241,6 +269,24 @@ impl ThresholdApp {
                     pixel[0] = 255 - pixel[0];
                     pixel[1] = 255 - pixel[1];
                     pixel[2] = 255 - pixel[2];
+                }
+            }
+
+            if self.bg_replace_enabled || self.fg_replace_enabled {
+                let bg = self.bg_color;
+                let fg = self.fg_color;
+                let do_bg = self.bg_replace_enabled;
+                let do_fg = self.fg_replace_enabled;
+                for pixel in processed.chunks_exact_mut(4) {
+                    if do_bg && pixel[0] == 0 {
+                        pixel[0] = bg[0];
+                        pixel[1] = bg[1];
+                        pixel[2] = bg[2];
+                    } else if do_fg && pixel[0] == 255 {
+                        pixel[0] = fg[0];
+                        pixel[1] = fg[1];
+                        pixel[2] = fg[2];
+                    }
                 }
             }
 
@@ -344,6 +390,17 @@ impl eframe::App for ThresholdApp {
                         if ui.checkbox(&mut inv, "Inv").on_hover_text("Invert B/W").changed() {
                             self.invert = inv;
                         }
+
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.bg_replace_enabled, "BG")
+                                .on_hover_text("Replace black pixels");
+                            ui.color_edit_button_srgb(&mut self.bg_color);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.fg_replace_enabled, "FG")
+                                .on_hover_text("Replace white pixels");
+                            ui.color_edit_button_srgb(&mut self.fg_color);
+                        });
 
                         let mut aot = self.always_on_top;
                         if ui.checkbox(&mut aot, "Top").on_hover_text("Always on top (F8)").changed() {

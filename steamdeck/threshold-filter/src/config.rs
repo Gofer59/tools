@@ -15,6 +15,8 @@ default_threshold = 128       # 0-255
 invert            = false     # swap black/white
 always_on_top     = true
 panel_width       = 50.0      # left control panel width in pixels
+bg_color          = [0, 0, 0]       # RGB replacement for post-pipeline black pixels (toggle in app)
+fg_color          = [255, 255, 255] # RGB replacement for post-pipeline white pixels (toggle in app)
 "#;
 
 #[derive(Deserialize)]
@@ -43,6 +45,10 @@ pub struct DisplayConfig {
     pub always_on_top: bool,
     #[serde(default = "default_panel_width")]
     pub panel_width: f32,
+    #[serde(default = "default_bg_color")]
+    pub bg_color: [u8; 3],
+    #[serde(default = "default_fg_color")]
+    pub fg_color: [u8; 3],
 }
 
 fn default_threshold() -> u8 {
@@ -53,6 +59,12 @@ fn default_true() -> bool {
 }
 fn default_panel_width() -> f32 {
     50.0
+}
+fn default_bg_color() -> [u8; 3] {
+    [0, 0, 0]
+}
+fn default_fg_color() -> [u8; 3] {
+    [255, 255, 255]
 }
 
 pub fn config_dir() -> PathBuf {

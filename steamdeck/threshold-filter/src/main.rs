@@ -191,6 +191,8 @@ fn main() -> Result<()> {
     let invert = cfg.display.invert;
     let always_on_top = cfg.display.always_on_top;
     let panel_width = cfg.display.panel_width;
+    let bg_color = cfg.display.bg_color;
+    let fg_color = cfg.display.fg_color;
 
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("Threshold Filter (Deck)")
@@ -220,6 +222,8 @@ fn main() -> Result<()> {
                 invert,
                 always_on_top,
                 panel_width,
+                bg_color,
+                fg_color,
             )))
         }),
     )
