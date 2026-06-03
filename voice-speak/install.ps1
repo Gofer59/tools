@@ -1,9 +1,9 @@
-param(
+﻿param(
     [switch]$FromSource,
     [string]$ReleaseUrl
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 
 $tool    = 'voice-speak'
 $appDir  = Join-Path $env:LOCALAPPDATA $tool
@@ -69,6 +69,26 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $daemonSrc = Join-Path $scriptDir 'python\piper_daemon.py'
 Copy-Item -Path $daemonSrc -Destination "$appDir\piper_daemon.py" -Force
 Write-Host "[install] Daemon script copied to $appDir\piper_daemon.py"
+
+# Seed config.json with the absolute venv Python path so first launch works.
+# Without this, the Rust default falls back to "python3", which on Windows
+# hits the Microsoft Store app-execution-alias stub and crashes the daemon.
+$configPath = Join-Path $appDir 'config.json'
+if (-not (Test-Path $configPath)) {
+    $venvPython = Join-Path $appDir 'venv\Scripts\python.exe'
+    $defaultConfig = [ordered]@{
+        hotkey        = 'Ctrl+Alt+V'
+        voice         = 'en_US-lessac-medium'
+        speed         = 1.0
+        noise_scale   = 0.667
+        noise_w_scale = 0.8
+        python_bin    = $venvPython
+    }
+    $defaultConfig | ConvertTo-Json | Set-Content -Path $configPath -Encoding UTF8
+    Write-Host "[install] Seeded $configPath with python_bin=$venvPython"
+} else {
+    Write-Host "[install] config.json already exists at $configPath — leaving untouched."
+}
 
 # ── 5. Create Start Menu shortcut ────────────────────────────────────────────
 

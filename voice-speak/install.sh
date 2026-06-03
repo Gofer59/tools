@@ -64,6 +64,26 @@ echo "[install] Binary installed to $BIN/$TOOL"
 install -m 0644 "$SCRIPT_DIR/python/piper_daemon.py" "$DATA/piper_daemon.py"
 echo "[install] Daemon script installed to $DATA/piper_daemon.py"
 
+# Seed config.json with the absolute venv Python path. Without this, the Rust
+# default falls back to bare "python3", which on Linux won't see the
+# piper-tts install inside our venv — the daemon would crash on import.
+CONFIG="$DATA/config.json"
+if [[ ! -f "$CONFIG" ]]; then
+    cat > "$CONFIG" <<EOF
+{
+  "hotkey": "Ctrl+Alt+V",
+  "voice": "en_US-lessac-medium",
+  "speed": 1.0,
+  "noise_scale": 0.667,
+  "noise_w_scale": 0.8,
+  "python_bin": "$DATA/venv/bin/python"
+}
+EOF
+    echo "[install] Seeded $CONFIG with python_bin=$DATA/venv/bin/python"
+else
+    echo "[install] config.json already exists at $CONFIG — leaving untouched."
+fi
+
 # ── 5. Create .desktop entry ─────────────────────────────────────────────────
 
 APPS="$HOME/.local/share/applications"
