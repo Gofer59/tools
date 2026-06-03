@@ -12,7 +12,7 @@
     (Windows 10 pre-1809) or fails.
 
     Runtime prerequisites (Python, WebView2) are handled by each tool's own
-    install.ps1 — they belong with the runtime, not the dev toolchain.
+    install.ps1 -- they belong with the runtime, not the dev toolchain.
 
 .PARAMETER Force
     Reinstall a toolchain even if it is already detected.
@@ -33,12 +33,12 @@ function Refresh-Path {
                 [Environment]::GetEnvironmentVariable('Path','User')
 }
 
-# ─── 1. Rust (rustup) ────────────────────────────────────────────────────────
+# --- 1. Rust (rustup) --------------------------------------------------------
 function Install-Rust {
     if (-not $Force `
         -and (Get-Command rustc -ErrorAction SilentlyContinue) `
         -and (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Host "[+] rustc + cargo already on PATH — skipping Rust install." -ForegroundColor Green
+        Write-Host "[+] rustc + cargo already on PATH -- skipping Rust install." -ForegroundColor Green
         return
     }
 
@@ -67,18 +67,18 @@ function Install-Rust {
     }
 }
 
-# ─── 2. Node.js 20+ LTS ──────────────────────────────────────────────────────
+# --- 2. Node.js 20+ LTS ------------------------------------------------------
 function Install-Node {
     if (-not $Force -and (Get-Command node -ErrorAction SilentlyContinue)) {
         $current = (& node --version) -replace '^v',''
         try {
             if ([version]$current -ge [version]'20.0.0') {
-                Write-Host "[+] node v$current already installed — skipping." -ForegroundColor Green
+                Write-Host "[+] node v$current already installed -- skipping." -ForegroundColor Green
                 return
             }
-            Write-Host "[*] node v$current is older than 20 LTS — upgrading."
+            Write-Host "[*] node v$current is older than 20 LTS -- upgrading."
         } catch {
-            Write-Host "[*] Could not parse node version '$current' — reinstalling LTS."
+            Write-Host "[*] Could not parse node version '$current' -- reinstalling LTS."
         }
     }
 
@@ -104,26 +104,26 @@ function Install-Node {
     }
 }
 
-# ─── 3. tauri-cli (cargo plugin) ─────────────────────────────────────────────
+# --- 3. tauri-cli (cargo plugin) ---------------------------------------------
 function Install-TauriCli {
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        Write-Error "cargo not found — Rust install failed or PATH not refreshed. Open a new PowerShell and re-run."
+        Write-Error "cargo not found -- Rust install failed or PATH not refreshed. Open a new PowerShell and re-run."
         return
     }
 
     if (-not $Force) {
         $existing = & cargo install --list 2>$null | Select-String '^tauri-cli '
         if ($existing) {
-            Write-Host "[+] tauri-cli already installed via cargo — skipping." -ForegroundColor Green
+            Write-Host "[+] tauri-cli already installed via cargo -- skipping." -ForegroundColor Green
             return
         }
     }
 
-    Write-Host "[*] Installing tauri-cli via cargo (this compiles from source — can take a few minutes)..."
+    Write-Host "[*] Installing tauri-cli via cargo (this compiles from source -- can take a few minutes)..."
     & cargo install tauri-cli --locked --version '^2.0'
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "cargo install tauri-cli returned $LASTEXITCODE — check the cargo output above."
+        Write-Warning "cargo install tauri-cli returned $LASTEXITCODE -- check the cargo output above."
         return
     }
     Write-Host "[+] tauri-cli ready: $(& cargo tauri --version 2>&1)" -ForegroundColor Green
