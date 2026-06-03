@@ -10,6 +10,52 @@ $appDir  = Join-Path $env:LOCALAPPDATA $tool
 $binDir  = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps'
 $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 
+function Ensure-Python {
+    # Returns a usable Python command name (py / python3 / python), installing
+    # Python 3.12 first if no real interpreter is on PATH. Rejects the Microsoft
+    # Store app-execution-alias stub: it lives under WindowsApps and exits with
+    # "Python was not found" instead of running.
+    foreach ($candidate in @('py','python3','python')) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd -and ($cmd.Source -notlike '*\WindowsApps\*')) {
+            return $candidate
+        }
+    }
+
+    Write-Host "[install] Python 3 not found on PATH. Installing..."
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "[install] Installing Python 3.12 via winget (user scope)..."
+        & winget install --id Python.Python.3.12 --scope user --silent `
+            --accept-source-agreements --accept-package-agreements
+    } else {
+        Write-Host "[install] winget unavailable, downloading installer from python.org..."
+        $pyUrl = 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe'
+        $pyExe = Join-Path $env:TEMP 'python-3.12.7-amd64.exe'
+        Invoke-WebRequest -Uri $pyUrl -OutFile $pyExe -UseBasicParsing
+        Write-Host "[install] Running python.org installer (silent, per-user, PATH on)..."
+        Start-Process -FilePath $pyExe `
+            -ArgumentList '/quiet','InstallAllUsers=0','PrependPath=1','Include_pip=1','Include_launcher=1' `
+            -Wait
+        Remove-Item $pyExe -Force
+    }
+
+    # Refresh PATH so the freshly installed python is visible in this session.
+    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('Path','User')
+
+    foreach ($candidate in @('py','python3','python')) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd -and ($cmd.Source -notlike '*\WindowsApps\*')) {
+            Write-Host "[install] Python installed: $($cmd.Source)"
+            return $candidate
+        }
+    }
+
+    Write-Error "Python install attempted but no usable interpreter on PATH. Install manually from https://www.python.org/downloads/ and re-run."
+    return $null
+}
+
 # ── 1. Ensure WebView2 runtime is present ────────────────────────────────────
 
 $webView2Key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
@@ -57,8 +103,14 @@ else {
 
 # ── 3. Set up Python venv and install piper-tts ──────────────────────────────
 
+$pyCmd = Ensure-Python
+if (-not $pyCmd) {
+    Write-Error "Cannot continue without Python. Aborting venv setup."
+    exit 1
+}
+
 Write-Host "[install] Setting up Python venv at $appDir\venv …"
-python -m venv "$appDir\venv"
+& $pyCmd -m venv "$appDir\venv"
 & "$appDir\venv\Scripts\pip.exe" install --quiet --upgrade pip
 & "$appDir\venv\Scripts\pip.exe" install --quiet piper-tts numpy
 Write-Host "[install] Python dependencies installed."

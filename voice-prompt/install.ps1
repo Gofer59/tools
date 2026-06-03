@@ -24,6 +24,52 @@ $appDir  = Join-Path $env:LOCALAPPDATA $tool
 
 Write-Host "=== voice-prompt installer ===" -ForegroundColor Cyan
 
+function Ensure-Python {
+    # Returns a usable Python command name (py / python3 / python), installing
+    # Python 3.12 first if no real interpreter is on PATH. Rejects the Microsoft
+    # Store app-execution-alias stub: it lives under WindowsApps and exits with
+    # "Python was not found" instead of running.
+    foreach ($candidate in @('py','python3','python')) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd -and ($cmd.Source -notlike '*\WindowsApps\*')) {
+            return $candidate
+        }
+    }
+
+    Write-Host "[*] Python 3 not found on PATH. Installing..." -ForegroundColor Yellow
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "[*] Installing Python 3.12 via winget (user scope)..."
+        & winget install --id Python.Python.3.12 --scope user --silent `
+            --accept-source-agreements --accept-package-agreements
+    } else {
+        Write-Host "[*] winget unavailable, downloading installer from python.org..."
+        $pyUrl = 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe'
+        $pyExe = Join-Path $env:TEMP 'python-3.12.7-amd64.exe'
+        Invoke-WebRequest -Uri $pyUrl -OutFile $pyExe -UseBasicParsing
+        Write-Host "[*] Running python.org installer (silent, per-user, PATH on)..."
+        Start-Process -FilePath $pyExe `
+            -ArgumentList '/quiet','InstallAllUsers=0','PrependPath=1','Include_pip=1','Include_launcher=1' `
+            -Wait
+        Remove-Item $pyExe -Force
+    }
+
+    # Refresh PATH so the freshly installed python is visible in this session.
+    $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('Path','User')
+
+    foreach ($candidate in @('py','python3','python')) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($cmd -and ($cmd.Source -notlike '*\WindowsApps\*')) {
+            Write-Host "[+] Python installed: $($cmd.Source)" -ForegroundColor Green
+            return $candidate
+        }
+    }
+
+    Write-Error "[!] Python install attempted but no usable interpreter on PATH. Install manually from https://www.python.org/downloads/ and re-run."
+    return $null
+}
+
 # ---------------------------------------------------------------------------
 # 1. Ensure WebView2 runtime is present
 # ---------------------------------------------------------------------------
@@ -99,20 +145,12 @@ Write-Host "[+] MSI installation complete." -ForegroundColor Green
 # ---------------------------------------------------------------------------
 # 4. Python check and venv setup
 # ---------------------------------------------------------------------------
-$pyCmd = $null
-foreach ($candidate in @('py', 'python3', 'python')) {
-    if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-        $pyCmd = $candidate
-        break
-    }
-}
+$pyCmd = Ensure-Python
 
 if (-not $pyCmd) {
     Write-Host ""
-    Write-Host "[!] WARNING: Python not found on PATH." -ForegroundColor Yellow
-    Write-Host "    voice-prompt requires Python with faster-whisper for transcription."
-    Write-Host "    Download and install Python 3.10+ from: https://www.python.org/downloads/"
-    Write-Host "    After installing Python, re-run this script to finish setup."
+    Write-Host "[!] Python install failed. voice-prompt needs Python 3.10+ with faster-whisper." -ForegroundColor Yellow
+    Write-Host "    Install Python manually from https://www.python.org/downloads/ and re-run this script."
 } else {
     Write-Host "[*] Python found: $pyCmd"
     $venvDir = Join-Path $appDir 'venv'
