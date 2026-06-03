@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Installs voice-prompt on Windows.
@@ -18,7 +18,7 @@ param(
     [string]$ReleaseUrl
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $tool    = 'voice-prompt'
 $appDir  = Join-Path $env:LOCALAPPDATA $tool
 
@@ -136,6 +136,26 @@ if (-not $pyCmd) {
         Write-Host "[+] whisper_daemon.py copied to $appDir" -ForegroundColor Green
     } else {
         Write-Host "[!] WARNING: whisper_daemon.py not found at $daemonSrc — skipping." -ForegroundColor Yellow
+    }
+
+    # Seed config.json with the absolute venv Python path so first launch works.
+    # Without this, the Rust default falls back to "python3", which on Windows
+    # hits the Microsoft Store app-execution-alias stub and crashes the daemon.
+    $configPath = Join-Path $appDir 'config.json'
+    if (-not (Test-Path $configPath)) {
+        $venvPython = Join-Path $venvDir 'Scripts\python.exe'
+        $defaultConfig = [ordered]@{
+            push_to_talk_key = 'Ctrl+Alt+Space'
+            whisper_model    = 'small'
+            language         = 'en'
+            vad_filter       = $true
+            python_bin       = $venvPython
+            compute_type     = 'int8'
+        }
+        $defaultConfig | ConvertTo-Json | Set-Content -Path $configPath -Encoding UTF8
+        Write-Host "[+] Seeded $configPath with python_bin=$venvPython" -ForegroundColor Green
+    } else {
+        Write-Host "[*] config.json already exists at $configPath — leaving untouched."
     }
 }
 

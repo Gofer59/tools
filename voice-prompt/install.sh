@@ -112,6 +112,26 @@ else
     echo "[+] Daemon script installed to $DATA/whisper_daemon.py"
 fi
 
+# Seed config.json with the absolute venv Python path. Without this, the Rust
+# default falls back to bare "python3", which works on Linux but won't see the
+# faster-whisper install in our venv — the daemon would crash on import.
+CONFIG="$DATA/config.json"
+if [[ ! -f "$CONFIG" ]]; then
+    cat > "$CONFIG" <<EOF
+{
+  "push_to_talk_key": "Ctrl+Alt+Space",
+  "whisper_model": "small",
+  "language": "en",
+  "vad_filter": true,
+  "python_bin": "$DATA/venv/bin/python",
+  "compute_type": "int8"
+}
+EOF
+    echo "[+] Seeded $CONFIG with python_bin=$DATA/venv/bin/python"
+else
+    echo "[*] config.json already exists at $CONFIG — leaving untouched."
+fi
+
 # ---------------------------------------------------------------------------
 # 5. Create .desktop entry
 # ---------------------------------------------------------------------------
