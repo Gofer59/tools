@@ -12,6 +12,10 @@ import os
 import glob
 
 STDOUT = sys.stdout.buffer
+# Force UTF-8 on stdin: Rust writes JSON as raw UTF-8 bytes, but Python's
+# default stdin encoding on Windows is cp1252, which silently mojibake's
+# accented characters (é, à, ç…) before they reach the phonemizer.
+sys.stdin.reconfigure(encoding="utf-8", errors="replace")
 STDIN = sys.stdin
 
 
